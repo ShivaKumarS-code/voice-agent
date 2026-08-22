@@ -7,3 +7,4 @@ langchain
 langchain-groq 
 python-dotenv
 langchain_text_splitters
+langchain_google_genai
