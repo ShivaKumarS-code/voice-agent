@@ -8,5 +8,6 @@ class Config:
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     INDEX_NAME = os.getenv("INDEX_NAME")
+    DB_URI = os.getenv("DATABASE_URL")
 
 settings = Config()

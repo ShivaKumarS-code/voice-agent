@@ -1,20 +1,26 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.models.chat import ChatRequest
-from app.agent.graph import graph
-
 
 router = APIRouter(prefix='/chat')
 
 @router.post('/')
-def chat(request: ChatRequest):
+def chat(request: Request, data: ChatRequest):
+    config = {
+        "configurable": {
+            "thread_id": "1"
+        }
+    }
+
+    graph = request.app.state.graph
+
     result = graph.invoke({
         "messages": [
             {
                 'role': 'user',
-                'content': request.message
+                'content': data.message
             }
         ]
-    })
+    }, config=config)
 
     response = result['messages'][-1].content
 

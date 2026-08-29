@@ -64,5 +64,3 @@ builder.add_conditional_edges(
 )
 
 builder.add_edge('tools', 'chatbot')
-
-graph = builder.compile()

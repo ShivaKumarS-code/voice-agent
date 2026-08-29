@@ -10,3 +10,8 @@ langchain_text_splitters
 langchain_google_genai
 pinecone
 langchain_pinecone
+langgraph-checkpoint-postgres 
+psycopg[binary]
+psycopg[pool]
+sqlmodel
+psycopg2
