@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
+from app.db.enums import OrderStatus, ShipmentStatus, ReplacementStatus, RefundStatus, ReturnStatus
 
 from sqlmodel import Field, SQLModel
 
@@ -19,7 +20,7 @@ class Order(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     customer_id: UUID = Field(foreign_key="customers.id")
-    status: str
+    status: OrderStatus
     order_date: datetime
     total_amount: Decimal
 
@@ -41,7 +42,7 @@ class Shipment(SQLModel, table=True):
     order_id: UUID = Field(foreign_key="orders.id")
     carrier: str
     tracking_number: str
-    status: str
+    status: ShipmentStatus
     estimated_delivery: datetime | None = None
 
 
@@ -51,7 +52,7 @@ class Return(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     order_id: UUID = Field(foreign_key="orders.id")
     order_item_id: UUID = Field(foreign_key="order_items.id")
-    status: str
+    status: ReturnStatus
     reason: str
     created_at: datetime
 
@@ -62,5 +63,15 @@ class Refund(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     return_id: UUID = Field(foreign_key="returns.id")
     amount: Decimal
-    status: str
+    status: RefundStatus
     processed_at: datetime | None = None
+
+class Replacement(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+
+    order_id: UUID = Field(foreign_key="orders.id")
+    order_item_id: UUID = Field(foreign_key="order_items.id")
+
+    status: ReplacementStatus
+    reason: str
+    created_at: datetime

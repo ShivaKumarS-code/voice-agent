@@ -3,6 +3,7 @@ from langchain.messages import SystemMessage
 from langchain_groq import ChatGroq
 from app.config import settings
 from app.tools.rag import search_knowledge_base
+from app.tools.orders import search_orders, get_order, cancel_order, request_return, request_replacement, process_refund
 from langgraph.prebuilt import ToolNode
 
 
@@ -12,7 +13,16 @@ llm = ChatGroq(
     temperature=0.2
 )
 
-tools = [search_knowledge_base]
+tools = [
+    search_knowledge_base, 
+    search_orders, 
+    get_order, 
+    cancel_order, 
+    request_return,
+    request_replacement,
+    process_refund
+    ]
+
 llm_with_tools = llm.bind_tools(tools)
 
 SYSTEM_PROMPT = """
