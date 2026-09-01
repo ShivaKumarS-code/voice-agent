@@ -9,5 +9,6 @@ class Config:
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     INDEX_NAME = os.getenv("INDEX_NAME")
     DB_URI = os.getenv("DATABASE_URL")
+    DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 settings = Config()
