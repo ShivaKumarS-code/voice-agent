@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 function App() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [agentResponse, setAgentResponse] = useState("");
 
   const websocketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -10,79 +11,190 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null);
 
   const startListening = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
 
-    const websocket = new WebSocket("ws://localhost:8000/ws/stt");
+      const websocket = new WebSocket("ws://localhost:8000/ws/stt");
 
-    websocket.binaryType = "arraybuffer";
+      websocket.binaryType = "arraybuffer";
 
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      websocket.onmessage = async (event) => {
+        // JSON messages from the backend
+        if (typeof event.data === "string") {
+          try {
+            const data = JSON.parse(event.data);
 
-      if (data.transcript) {
-        setTranscript(data.transcript);
-      }
-    };
+            console.log("WebSocket message:", data);
 
-    websocket.onclose = () => {
-      setIsListening(false);
-    };
+            // STT transcript
+            if (data.transcript) {
+              console.log("Transcript:", data.transcript);
+              setTranscript(data.transcript);
+            }
 
-    websocketRef.current = websocket;
+            // Agent response
+            if (data.response) {
+              console.log("Agent response:", data.response);
+              setAgentResponse(data.response);
+            }
+          } catch (error) {
+            console.error("Failed to parse WebSocket message:", error);
+          }
 
-    await new Promise<void>((resolve) => {
-      websocket.onopen = () => resolve();
-    });
+          return;
+        }
 
-    const audioContext = new AudioContext({
-      sampleRate: 16000,
-    });
+        // Binary audio from ElevenLabs
+        if (event.data instanceof ArrayBuffer) {
+          try {
+            console.log(
+              "Received TTS audio:",
+              event.data.byteLength,
+              "bytes"
+            );
 
-    const source = audioContext.createMediaStreamSource(stream);
+            const audioContext = audioContextRef.current;
 
-    const processor = audioContext.createScriptProcessor(
-      1024,
-      1,
-      1
-    );
+            if (!audioContext) {
+              console.error("AudioContext not available");
+              return;
+            }
 
-    processor.onaudioprocess = (event) => {
-      if (websocket.readyState !== WebSocket.OPEN) return;
+            if (audioContext.state === "suspended") {
+              await audioContext.resume();
+            }
 
-      const input = event.inputBuffer.getChannelData(0);
+            const audioBuffer = await audioContext.decodeAudioData(
+              event.data.slice(0)
+            );
 
-      const pcm = new Int16Array(input.length);
+            const source = audioContext.createBufferSource();
 
-      for (let i = 0; i < input.length; i++) {
-        const sample = Math.max(-1, Math.min(1, input[i]));
-        pcm[i] = sample < 0
-          ? sample * 32768
-          : sample * 32767;
-      }
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
 
-      websocket.send(pcm.buffer);
-    };
+            source.start();
 
-    source.connect(processor);
-    processor.connect(audioContext.destination);
+            console.log("Playing TTS audio");
+          } catch (error) {
+            console.error("Failed to decode/play TTS audio:", error);
+          }
+        }
+      };
 
-    audioContextRef.current = audioContext;
-    processorRef.current = processor;
-    streamRef.current = stream;
+      websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
 
-    setTranscript("");
-    setIsListening(true);
+      websocket.onclose = () => {
+        console.log("WebSocket closed");
+        setIsListening(false);
+      };
+
+      websocketRef.current = websocket;
+
+      // Wait for WebSocket connection
+      await new Promise<void>((resolve, reject) => {
+        websocket.onopen = () => {
+          console.log("WebSocket connected");
+          resolve();
+        };
+
+        websocket.onerror = () => {
+          reject(
+            new Error("WebSocket connection failed")
+          );
+        };
+      });
+
+      // --------------------------------
+      // IMPORTANT:
+      // Keep STT at 16 kHz
+      // --------------------------------
+      const audioContext = new AudioContext({
+        sampleRate: 16000,
+      });
+
+      await audioContext.resume();
+
+      audioContextRef.current = audioContext;
+
+      const source =
+        audioContext.createMediaStreamSource(stream);
+
+      // Keep the working STT configuration
+      const processor =
+        audioContext.createScriptProcessor(
+          4096,
+          1,
+          1
+        );
+
+      processor.onaudioprocess = (event) => {
+        if (
+          websocket.readyState !==
+          WebSocket.OPEN
+        ) {
+          return;
+        }
+
+        const input =
+          event.inputBuffer.getChannelData(0);
+
+        const pcm =
+          new Int16Array(input.length);
+
+        for (
+          let i = 0;
+          i < input.length;
+          i++
+        ) {
+          const sample = Math.max(
+            -1,
+            Math.min(1, input[i])
+          );
+
+          pcm[i] =
+            sample < 0
+              ? sample * 32768
+              : sample * 32767;
+        }
+
+        websocket.send(pcm.buffer);
+      };
+
+      source.connect(processor);
+
+      processor.connect(
+        audioContext.destination
+      );
+
+      processorRef.current = processor;
+      streamRef.current = stream;
+
+      setTranscript("");
+      setAgentResponse("");
+      setIsListening(true);
+    } catch (error) {
+      console.error(
+        "Failed to start listening:",
+        error
+      );
+    }
   };
 
   const stopListening = () => {
     processorRef.current?.disconnect();
+
     audioContextRef.current?.close();
 
-    streamRef.current?.getTracks().forEach((track) => {
-      track.stop();
-    });
+    streamRef.current
+      ?.getTracks()
+      .forEach((track) => {
+        track.stop();
+      });
 
     websocketRef.current?.close();
 
@@ -98,56 +210,89 @@ function App() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-xl">
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+
+          {/* Header */}
           <div className="mb-8">
             <p className="text-sm font-medium text-blue-400">
               Voice Agent
             </p>
 
             <h1 className="mt-2 text-3xl font-semibold text-white">
-              Speech to Text
+              Voice Assistant
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Speak naturally and see the transcription in real time.
+              Speak naturally and talk with the AI
+              agent in real time.
             </p>
           </div>
 
+          {/* User */}
           <div className="min-h-32 rounded-xl border border-slate-800 bg-slate-950 p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Transcript
+              You
             </p>
 
             <p className="mt-4 text-lg text-slate-200">
               {transcript || (
                 <span className="text-slate-600">
-                  Your transcript will appear here...
+                  Your speech will appear here...
                 </span>
               )}
             </p>
           </div>
 
+          {/* Agent */}
+          <div className="mt-4 min-h-32 rounded-xl border border-slate-800 bg-slate-950 p-5">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              Agent
+            </p>
+
+            <p className="mt-4 text-lg text-slate-200">
+              {agentResponse || (
+                <span className="text-slate-600">
+                  The agent response will appear
+                  here...
+                </span>
+              )}
+            </p>
+          </div>
+
+          {/* Button */}
           <button
-            onClick={isListening ? stopListening : startListening}
+            onClick={
+              isListening
+                ? stopListening
+                : startListening
+            }
             className={`mt-6 w-full rounded-xl px-5 py-3 font-medium transition ${
               isListening
                 ? "bg-red-500 text-white hover:bg-red-600"
                 : "bg-blue-500 text-white hover:bg-blue-600"
             }`}
           >
-            {isListening ? "Stop Listening" : "Start Talking"}
+            {isListening
+              ? "Stop Listening"
+              : "Start Talking"}
           </button>
 
+          {/* Status */}
           <div className="mt-4 flex items-center justify-center gap-2">
             <span
               className={`h-2 w-2 rounded-full ${
-                isListening ? "bg-green-400" : "bg-slate-600"
+                isListening
+                  ? "bg-green-400"
+                  : "bg-slate-600"
               }`}
             />
 
             <span className="text-sm text-slate-500">
-              {isListening ? "Listening..." : "Not listening"}
+              {isListening
+                ? "Listening..."
+                : "Not listening"}
             </span>
           </div>
+
         </div>
       </div>
     </div>

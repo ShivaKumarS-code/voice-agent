@@ -10,5 +10,6 @@ class Config:
     INDEX_NAME = os.getenv("INDEX_NAME")
     DB_URI = os.getenv("DATABASE_URL")
     DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 settings = Config()

@@ -16,3 +16,4 @@ psycopg[pool]
 sqlmodel
 psycopg2
 deepgram-sdk
+elevenlabs
