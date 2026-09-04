@@ -1,4 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Valley+Sans:ital,wght@0,300..800;1,300..800&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: 'Valley Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
 
 /*
   Backstop against a horizontal swipe on phones. Every part of this layout is
@@ -7,9 +12,11 @@
   propagates to the viewport and leaves vertical scrolling alone - `clip` would
   force overflow-y to hidden and kill it.
 */
-html {
+html, body {
   overflow-x: hidden;
+  font-family: 'Valley Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
 
 /*
   Mesh gradient behind the card: four elliptical washes over a near-white base.

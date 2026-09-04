@@ -1,8 +1,10 @@
 import asyncio
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from deepgram.core.events import EventType
 
+from app.auth.security import get_current_user_ws
+from app.db.database import get_session
 from app.services.speech_to_text import SpeechToText
 from app.services.text_to_speech import TextToSpeech
 
@@ -14,8 +16,23 @@ tts = TextToSpeech()
 
 
 @router.websocket("/ws/stt")
-async def speech_to_text(websocket: WebSocket):
+async def speech_to_text(
+    websocket: WebSocket,
+    token: str | None = Query(None),
+):
+    # Verify authentication token
+    session = next(get_session())
+    try:
+        user = get_current_user_ws(token, session)
+    finally:
+        session.close()
+
+    if not user:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized")
+        return
+
     await websocket.accept()
+    thread_id = str(user.id)
 
     try:
         async with stt.connect() as connection:
@@ -39,9 +56,10 @@ async def speech_to_text(websocket: WebSocket):
 
                     config = {
                         "configurable": {
-                            "thread_id": "1"
+                            "thread_id": thread_id
                         }
                     }
+
 
                     # --------------------------------------------------
                     # Run LangGraph

@@ -1,8 +1,10 @@
 import httpx
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.security import get_current_user
 from app.config import settings
+from app.db.models import User
 
 
 router = APIRouter(prefix="/simli")
@@ -23,7 +25,8 @@ def simli_config():
 
 
 @router.post("/token")
-async def simli_token():
+async def simli_token(current_user: User = Depends(get_current_user)):
+
     """
     Exchanges the server-side API key for a short-lived session token that the
     browser uses to open its WebRTC connection to Simli.

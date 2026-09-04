@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { pcm16ToAudioBuffer } from "../lib/audio";
+import { getAuthHeaders, getToken } from "../lib/auth";
 import { apiUrl, wsUrl } from "../lib/config";
 import { createId, formatTime } from "../lib/format";
+
 import type { CallStatus, Message, Role } from "../lib/types";
 
 // Deepgram STT expects 16 kHz mono PCM.
@@ -149,8 +151,11 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
 
       streamRef.current = stream;
 
-      const websocket = new WebSocket(wsUrl("/ws/stt"));
+      const token = getToken();
+      const wsPath = token ? `/ws/stt?token=${encodeURIComponent(token)}` : "/ws/stt";
+      const websocket = new WebSocket(wsUrl(wsPath));
       websocket.binaryType = "arraybuffer";
+
 
       websocketRef.current = websocket;
 
@@ -320,9 +325,13 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
       try {
         const response = await fetch(apiUrl("/chat/"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
           body: JSON.stringify({ message: trimmed }),
         });
+
 
         if (!response.ok) {
           throw new Error(`Server responded with ${response.status}`);

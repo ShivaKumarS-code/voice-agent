@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LogLevel, SimliClient } from "simli-client";
 
+import { getAuthHeaders } from "../lib/auth";
 import { apiUrl } from "../lib/config";
+
 
 export type AvatarStatus =
   | "unavailable"
@@ -102,7 +104,11 @@ export function useSimliAvatar() {
     try {
       const response = await fetch(apiUrl("/simli/token"), {
         method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+        },
       });
+
 
       if (response.status === 503) {
         setStatus("unavailable");

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvatarStage } from "./components/AvatarStage";
 import { ChatPanel } from "./components/ChatPanel";
@@ -6,12 +6,14 @@ import {
   BoltIcon,
   LockIcon,
   LogoIcon,
-  ShieldIcon,
   WaveIcon,
 } from "./components/Icons";
+import { LoginPage } from "./components/LoginPage";
 import { useSimliAvatar } from "./hooks/useSimliAvatar";
 import type { AvatarStatus } from "./hooks/useSimliAvatar";
 import { useVoiceAgent } from "./hooks/useVoiceAgent";
+import { fetchCurrentUser, removeToken } from "./lib/auth";
+import type { AuthUser } from "./lib/auth";
 
 const features = [
   {
@@ -41,6 +43,32 @@ const avatarPillCopy: Record<AvatarStatus, string> = {
 
 function App() {
   const avatar = useSimliAvatar();
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchCurrentUser()
+      .then((user) => {
+        if (user) {
+          setCurrentUser(user);
+        }
+      })
+      .finally(() => {
+        setLoadingAuth(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const {
     status,
@@ -66,10 +94,23 @@ function App() {
     void startCall();
   }, [avatar, startCall]);
 
+  const handleSendText = useCallback(
+    (text: string) => {
+      void sendText(text);
+    },
+    [sendText]
+  );
+
   const endCall = useCallback(() => {
     void avatar.stop();
     stopCall();
   }, [avatar, stopCall]);
+
+  const handleLogout = () => {
+    removeToken();
+    setCurrentUser(null);
+    endCall();
+  };
 
   // While the avatar is talking it owns the audio, so the waveform follows its
   // analyser; the rest of the time it follows the microphone.
@@ -78,8 +119,29 @@ function App() {
       ? avatar.analyserRef
       : analyserRef;
 
-  // The card is vertically centered and scrolls normally once it is taller
-  // than the viewport.
+  if (loadingAuth) {
+    return (
+      <div className="app-backdrop flex min-h-screen items-center justify-center bg-[#e8ecef]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-blue-600 border-t-transparent" />
+          <span className="text-xs font-semibold text-slate-500">Loading TechMart...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not authenticated, render the dedicated LoginPage (matching reference design)
+  if (!currentUser) {
+    return <LoginPage onSuccess={(user) => setCurrentUser(user)} />;
+  }
+
+  const userInitial = (
+    currentUser.full_name?.trim()
+      ? currentUser.full_name.trim()[0]
+      : currentUser.email[0]
+  ).toUpperCase();
+
+  // When authenticated, render the main Voice Agent dashboard
   return (
     <div className="app-backdrop flex min-h-screen items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
       {/* min-w-0 so wide content can never inflate the card past 100% width */}
@@ -92,35 +154,50 @@ function App() {
             TechMart Voice Agent
           </h1>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200/70">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  avatar.status === "ready"
-                    ? "bg-emerald-500"
-                    : avatar.status === "connecting"
-                      ? "bg-amber-500"
-                      : avatar.status === "error"
-                        ? "bg-red-400"
-                        : "bg-slate-300"
-                }`}
-              />
-
-              <span className="text-xs font-medium text-slate-600">
-                {avatarPillCopy[avatar.status]}
-              </span>
-            </div>
-
-            <div
-              title="Secure session"
-              className="hidden h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100 sm:grid"
+          <div className="ml-auto relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+              className="h-9 w-9 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shadow-md shadow-blue-500/25 hover:bg-blue-500 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
+              title={currentUser.full_name || currentUser.email}
             >
-              <ShieldIcon className="h-5 w-5" />
-            </div>
+              {userInitial}
+            </button>
+
+            {isProfileMenuOpen && (
+              <div className="absolute right-0 top-11 w-52 bg-white rounded-2xl p-3 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-2 py-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {currentUser.full_name || currentUser.email.split("@")[0]}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {currentUser.email}
+                  </p>
+                </div>
+
+                <div className="border-t border-slate-100 my-2" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Log Out
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
+
         {(error || avatar.error) && (
+
           <div
             role="alert"
             className="mb-4 flex items-start gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100"
@@ -164,8 +241,9 @@ function App() {
             <ChatPanel
               messages={messages}
               isThinking={isThinking}
-              onSend={sendText}
+              onSend={handleSendText}
             />
+
           </div>
         </div>
 

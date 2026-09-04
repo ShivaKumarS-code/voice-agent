@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from app.auth.security import get_current_user
+from app.db.models import User
 from app.models.chat import ChatRequest
 
 router = APIRouter(prefix='/chat')
 
 @router.post('/')
-def chat(request: Request, data: ChatRequest):
+def chat(
+    request: Request,
+    data: ChatRequest,
+    current_user: User = Depends(get_current_user),
+):
     config = {
         "configurable": {
-            "thread_id": "1"
+            "thread_id": str(current_user.id)
         }
     }
+
 
     graph = request.app.state.graph
 

@@ -13,5 +13,8 @@ class Config:
     ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
     SIMLI_API_KEY = os.getenv("SIMLI_API_KEY")
     SIMLI_FACE_ID = os.getenv("SIMLI_FACE_ID")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production-1234567890")
+    JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
-settings = Config()
+settings = Config()
