@@ -1,298 +1,191 @@
-import { useRef, useState } from "react";
+import { useCallback } from "react";
+
+import { AvatarStage } from "./components/AvatarStage";
+import { ChatPanel } from "./components/ChatPanel";
+import {
+  BoltIcon,
+  LockIcon,
+  LogoIcon,
+  ShieldIcon,
+  WaveIcon,
+} from "./components/Icons";
+import { useSimliAvatar } from "./hooks/useSimliAvatar";
+import type { AvatarStatus } from "./hooks/useSimliAvatar";
+import { useVoiceAgent } from "./hooks/useVoiceAgent";
+
+const features = [
+  {
+    Icon: BoltIcon,
+    title: "Real-time conversation",
+    body: "Natural, low-latency interactions",
+  },
+  {
+    Icon: WaveIcon,
+    title: "Human-like responses",
+    body: "Powered by a knowledge-grounded agent",
+  },
+  {
+    Icon: LockIcon,
+    title: "Order aware",
+    body: "Returns, refunds and warranty lookups",
+  },
+];
+
+const avatarPillCopy: Record<AvatarStatus, string> = {
+  unavailable: "Voice only",
+  idle: "Avatar idle",
+  connecting: "Connecting",
+  ready: "Live avatar",
+  error: "Avatar error",
+};
 
 function App() {
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [agentResponse, setAgentResponse] = useState("");
+  const avatar = useSimliAvatar();
 
-  const websocketRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const {
+    status,
+    isMuted,
+    isSpeaking,
+    isThinking,
+    messages,
+    error,
+    analyserRef,
+    startCall,
+    stopCall,
+    toggleMute,
+    sendText,
+    dismissError,
+  } = useVoiceAgent({
+    onAgentAudio: avatar.sendAudio,
+    onUserSpeech: avatar.interrupt,
+  });
 
-  const startListening = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
+  const beginCall = useCallback(() => {
+    // Both connections are independent, so open them together.
+    void avatar.start();
+    void startCall();
+  }, [avatar, startCall]);
 
-      const websocket = new WebSocket("ws://localhost:8000/ws/stt");
+  const endCall = useCallback(() => {
+    void avatar.stop();
+    stopCall();
+  }, [avatar, stopCall]);
 
-      websocket.binaryType = "arraybuffer";
+  // While the avatar is talking it owns the audio, so the waveform follows its
+  // analyser; the rest of the time it follows the microphone.
+  const waveformAnalyser =
+    avatar.status === "ready" && avatar.isSpeaking
+      ? avatar.analyserRef
+      : analyserRef;
 
-      websocket.onmessage = async (event) => {
-        // JSON messages from the backend
-        if (typeof event.data === "string") {
-          try {
-            const data = JSON.parse(event.data);
-
-            console.log("WebSocket message:", data);
-
-            // STT transcript
-            if (data.transcript) {
-              console.log("Transcript:", data.transcript);
-              setTranscript(data.transcript);
-            }
-
-            // Agent response
-            if (data.response) {
-              console.log("Agent response:", data.response);
-              setAgentResponse(data.response);
-            }
-          } catch (error) {
-            console.error("Failed to parse WebSocket message:", error);
-          }
-
-          return;
-        }
-
-        // Binary audio from ElevenLabs
-        if (event.data instanceof ArrayBuffer) {
-          try {
-            console.log(
-              "Received TTS audio:",
-              event.data.byteLength,
-              "bytes"
-            );
-
-            const audioContext = audioContextRef.current;
-
-            if (!audioContext) {
-              console.error("AudioContext not available");
-              return;
-            }
-
-            if (audioContext.state === "suspended") {
-              await audioContext.resume();
-            }
-
-            const audioBuffer = await audioContext.decodeAudioData(
-              event.data.slice(0)
-            );
-
-            const source = audioContext.createBufferSource();
-
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-
-            source.start();
-
-            console.log("Playing TTS audio");
-          } catch (error) {
-            console.error("Failed to decode/play TTS audio:", error);
-          }
-        }
-      };
-
-      websocket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
-
-      websocket.onclose = () => {
-        console.log("WebSocket closed");
-        setIsListening(false);
-      };
-
-      websocketRef.current = websocket;
-
-      // Wait for WebSocket connection
-      await new Promise<void>((resolve, reject) => {
-        websocket.onopen = () => {
-          console.log("WebSocket connected");
-          resolve();
-        };
-
-        websocket.onerror = () => {
-          reject(
-            new Error("WebSocket connection failed")
-          );
-        };
-      });
-
-      // --------------------------------
-      // IMPORTANT:
-      // Keep STT at 16 kHz
-      // --------------------------------
-      const audioContext = new AudioContext({
-        sampleRate: 16000,
-      });
-
-      await audioContext.resume();
-
-      audioContextRef.current = audioContext;
-
-      const source =
-        audioContext.createMediaStreamSource(stream);
-
-      // Keep the working STT configuration
-      const processor =
-        audioContext.createScriptProcessor(
-          4096,
-          1,
-          1
-        );
-
-      processor.onaudioprocess = (event) => {
-        if (
-          websocket.readyState !==
-          WebSocket.OPEN
-        ) {
-          return;
-        }
-
-        const input =
-          event.inputBuffer.getChannelData(0);
-
-        const pcm =
-          new Int16Array(input.length);
-
-        for (
-          let i = 0;
-          i < input.length;
-          i++
-        ) {
-          const sample = Math.max(
-            -1,
-            Math.min(1, input[i])
-          );
-
-          pcm[i] =
-            sample < 0
-              ? sample * 32768
-              : sample * 32767;
-        }
-
-        websocket.send(pcm.buffer);
-      };
-
-      source.connect(processor);
-
-      processor.connect(
-        audioContext.destination
-      );
-
-      processorRef.current = processor;
-      streamRef.current = stream;
-
-      setTranscript("");
-      setAgentResponse("");
-      setIsListening(true);
-    } catch (error) {
-      console.error(
-        "Failed to start listening:",
-        error
-      );
-    }
-  };
-
-  const stopListening = () => {
-    processorRef.current?.disconnect();
-
-    audioContextRef.current?.close();
-
-    streamRef.current
-      ?.getTracks()
-      .forEach((track) => {
-        track.stop();
-      });
-
-    websocketRef.current?.close();
-
-    processorRef.current = null;
-    audioContextRef.current = null;
-    streamRef.current = null;
-    websocketRef.current = null;
-
-    setIsListening(false);
-  };
-
+  // The card is vertically centered and scrolls normally once it is taller
+  // than the viewport.
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-xl">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+    <div className="app-backdrop flex min-h-screen items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
+      {/* min-w-0 so wide content can never inflate the card past 100% width */}
+      <div className="w-full max-w-[84rem] min-w-0 rounded-3xl bg-white p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/60 sm:p-6">
+        {/* Top bar */}
+        <header className="flex items-center gap-3 pb-4 sm:pb-5">
+          <LogoIcon className="h-6 w-6 shrink-0 text-blue-600" />
 
-          {/* Header */}
-          <div className="mb-8">
-            <p className="text-sm font-medium text-blue-400">
-              Voice Agent
-            </p>
+          <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+            TechMart Voice Agent
+          </h1>
 
-            <h1 className="mt-2 text-3xl font-semibold text-white">
-              Voice Assistant
-            </h1>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200/70">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  avatar.status === "ready"
+                    ? "bg-emerald-500"
+                    : avatar.status === "connecting"
+                      ? "bg-amber-500"
+                      : avatar.status === "error"
+                        ? "bg-red-400"
+                        : "bg-slate-300"
+                }`}
+              />
 
-            <p className="mt-2 text-slate-400">
-              Speak naturally and talk with the AI
-              agent in real time.
-            </p>
+              <span className="text-xs font-medium text-slate-600">
+                {avatarPillCopy[avatar.status]}
+              </span>
+            </div>
+
+            <div
+              title="Secure session"
+              className="hidden h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100 sm:grid"
+            >
+              <ShieldIcon className="h-5 w-5" />
+            </div>
           </div>
+        </header>
 
-          {/* User */}
-          <div className="min-h-32 rounded-xl border border-slate-800 bg-slate-950 p-5">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              You
-            </p>
-
-            <p className="mt-4 text-lg text-slate-200">
-              {transcript || (
-                <span className="text-slate-600">
-                  Your speech will appear here...
-                </span>
-              )}
-            </p>
-          </div>
-
-          {/* Agent */}
-          <div className="mt-4 min-h-32 rounded-xl border border-slate-800 bg-slate-950 p-5">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Agent
-            </p>
-
-            <p className="mt-4 text-lg text-slate-200">
-              {agentResponse || (
-                <span className="text-slate-600">
-                  The agent response will appear
-                  here...
-                </span>
-              )}
-            </p>
-          </div>
-
-          {/* Button */}
-          <button
-            onClick={
-              isListening
-                ? stopListening
-                : startListening
-            }
-            className={`mt-6 w-full rounded-xl px-5 py-3 font-medium transition ${
-              isListening
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-blue-500 text-white hover:bg-blue-600"
-            }`}
+        {(error || avatar.error) && (
+          <div
+            role="alert"
+            className="mb-4 flex items-start gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100"
           >
-            {isListening
-              ? "Stop Listening"
-              : "Start Talking"}
-          </button>
+            <span className="flex-1">{error ?? avatar.error}</span>
 
-          {/* Status */}
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                isListening
-                  ? "bg-green-400"
-                  : "bg-slate-600"
-              }`}
-            />
-
-            <span className="text-sm text-slate-500">
-              {isListening
-                ? "Listening..."
-                : "Not listening"}
-            </span>
+            <button
+              type="button"
+              onClick={dismissError}
+              className="shrink-0 font-medium text-red-600 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            >
+              Dismiss
+            </button>
           </div>
+        )}
 
+        {/* Stage + chat */}
+        {/*
+          The row height is fixed on desktop so an empty transcript cannot
+          collapse the chat column and shrink the avatar stage with it. It is
+          clamped against the viewport rather than pinned to one value: the
+          header, feature strip and page padding come to ~17rem, so anything
+          taller than that budget would put the page into scroll.
+        */}
+        <div className="grid gap-4 lg:h-[clamp(24rem,calc(100vh-17rem),40rem)] lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-stretch">
+          <AvatarStage
+            status={status}
+            isMuted={isMuted}
+            isSpeaking={isSpeaking || avatar.isSpeaking}
+            isThinking={isThinking}
+            analyserRef={waveformAnalyser}
+            avatarStatus={avatar.status}
+            videoRef={avatar.videoRef}
+            audioRef={avatar.audioRef}
+            onStart={beginCall}
+            onStop={endCall}
+            onToggleMute={toggleMute}
+          />
+
+          <div className="h-[30rem] min-h-0 lg:h-full">
+            <ChatPanel
+              messages={messages}
+              isThinking={isThinking}
+              onSend={sendText}
+            />
+          </div>
+        </div>
+
+        {/* Feature strip */}
+        <div className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3 sm:gap-6">
+          {features.map(({ Icon, title, body }) => (
+            <div key={title} className="flex items-center gap-3 sm:justify-center">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600">
+                <Icon className="h-5 w-5" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {title}
+                </p>
+
+                <p className="truncate text-xs text-slate-500">{body}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

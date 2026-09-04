@@ -16,11 +16,13 @@ class TextToSpeech:
         self.model_id = "eleven_flash_v2_5"
 
     async def synthesize(self, text: str) -> bytes:
+        # Raw PCM16 at 16 kHz: the format Simli's avatar expects, so the
+        # browser can forward these bytes straight to sendAudioData.
         url = (
             f"wss://api.elevenlabs.io/v1/text-to-speech/"
             f"{self.voice_id}/stream-input"
             f"?model_id={self.model_id}"
-            f"&output_format=mp3_44100_128"
+            f"&output_format=pcm_16000"
         )
 
         audio_chunks = []

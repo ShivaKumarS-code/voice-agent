@@ -11,5 +11,7 @@ class Config:
     DB_URI = os.getenv("DATABASE_URL")
     DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
     ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+    SIMLI_API_KEY = os.getenv("SIMLI_API_KEY")
+    SIMLI_FACE_ID = os.getenv("SIMLI_FACE_ID")
 
 settings = Config()
