@@ -5,7 +5,7 @@ from app.db.database import engine
 from datetime import datetime
 
 @tool
-def search_orders(email: str) -> list[dict]:
+def search_orders(email: str) -> dict:
     """Find a customer's orders using their account email."""
 
     with Session(engine) as session:
@@ -14,7 +14,11 @@ def search_orders(email: str) -> list[dict]:
         ).first()
 
         if not customer:
-            return []
+            return {
+                "success": False,
+                "orders": [],
+                "message": "No customer was found with that email.",
+            }
 
         orders = session.exec(
             select(Order).where(Order.customer_id == customer.id).order_by(Order.order_date.desc())
@@ -40,8 +44,19 @@ def search_orders(email: str) -> list[dict]:
                     for item in items
                 ],
             })
-        
-        return results
+
+        if not results:
+            return {
+                "success": True,
+                "orders": [],
+                "message": "This customer has no orders.",
+            }
+
+        return {
+            "success": True,
+            "count": len(results),
+            "orders": results,
+        }
 
 @tool
 def get_order(order_id: str) -> dict:

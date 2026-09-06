@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvatarStage } from "./components/AvatarStage";
 import { ChatPanel } from "./components/ChatPanel";
+import { CartDrawer } from "./components/CartDrawer";
+import type { CartItem } from "./components/CartDrawer";
 import {
   BoltIcon,
+  CartIcon,
   LockIcon,
   LogoIcon,
   WaveIcon,
@@ -12,8 +15,9 @@ import { LoginPage } from "./components/LoginPage";
 import { useSimliAvatar } from "./hooks/useSimliAvatar";
 import type { AvatarStatus } from "./hooks/useSimliAvatar";
 import { useVoiceAgent } from "./hooks/useVoiceAgent";
-import { fetchCurrentUser, removeToken } from "./lib/auth";
+import { fetchCurrentUser, getAuthHeaders, removeToken } from "./lib/auth";
 import type { AuthUser } from "./lib/auth";
+import { apiUrl } from "./lib/config";
 
 const features = [
   {
@@ -46,29 +50,91 @@ function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isLoadingCart, setIsLoadingCart] = useState(false);
+  const [isCartBouncing, setIsCartBouncing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cartMenuRef = useRef<HTMLDivElement>(null);
+  // Opening the drawer and an agent cart update can both fetch at once, so
+  // responses are matched against the newest request and older ones dropped.
+  // Without this the slower reply can overwrite the fresher cart.
+  const cartRequestRef = useRef(0);
+  const bounceTimerRef = useRef<number | null>(null);
+
+  const fetchCart = useCallback(async (shouldBounce = true) => {
+    const requestId = cartRequestRef.current + 1;
+    cartRequestRef.current = requestId;
+
+    try {
+      setIsLoadingCart(true);
+      const res = await fetch(apiUrl("/cart/"), {
+        headers: getAuthHeaders(),
+      });
+
+      if (requestId !== cartRequestRef.current) return;
+
+      if (res.ok) {
+        const data = await res.json();
+        setCartItems(data.items || []);
+        if (shouldBounce) {
+          setIsCartBouncing(true);
+          if (bounceTimerRef.current !== null) {
+            clearTimeout(bounceTimerRef.current);
+          }
+          bounceTimerRef.current = window.setTimeout(() => {
+            bounceTimerRef.current = null;
+            setIsCartBouncing(false);
+          }, 1200);
+        }
+      }
+    } catch {
+      // Ignore cart fetch errors silently
+    } finally {
+      if (requestId === cartRequestRef.current) {
+        setIsLoadingCart(false);
+      }
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (bounceTimerRef.current !== null) {
+        clearTimeout(bounceTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     fetchCurrentUser()
       .then((user) => {
         if (user) {
           setCurrentUser(user);
+          void fetchCart(false);
         }
       })
       .finally(() => {
         setLoadingAuth(false);
       });
-  }, []);
+  }, [fetchCart]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
+      if (cartMenuRef.current && !cartMenuRef.current.contains(event.target as Node)) {
+        setIsCartOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleCartUpdated = useCallback(() => {
+    void fetchCart(true);
+  }, [fetchCart]);
 
   const {
     status,
@@ -86,6 +152,7 @@ function App() {
   } = useVoiceAgent({
     onAgentAudio: avatar.sendAudio,
     onUserSpeech: avatar.interrupt,
+    onCartUpdated: handleCartUpdated,
   });
 
   const beginCall = useCallback(() => {
@@ -109,8 +176,15 @@ function App() {
   const handleLogout = () => {
     removeToken();
     setCurrentUser(null);
+    // The cart belongs to the account that just left, so drop it rather than
+    // letting the badge carry a stale count into the next session.
+    setCartItems([]);
+    setIsCartOpen(false);
+    cartRequestRef.current += 1;
     endCall();
   };
+
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // While the avatar is talking it owns the audio, so the waveform follows its
   // analyser; the rest of the time it follows the microphone.
@@ -132,7 +206,10 @@ function App() {
 
   // If user is not authenticated, render the dedicated LoginPage (matching reference design)
   if (!currentUser) {
-    return <LoginPage onSuccess={(user) => setCurrentUser(user)} />;
+    return <LoginPage onSuccess={(user) => {
+      setCurrentUser(user);
+      void fetchCart(false);
+    }} />;
   }
 
   const userInitial = (
@@ -154,44 +231,80 @@ function App() {
             TechMart Voice Agent
           </h1>
 
-          <div className="ml-auto relative" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setIsProfileMenuOpen((prev) => !prev)}
-              className="h-9 w-9 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shadow-md shadow-blue-500/25 hover:bg-blue-500 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
-              title={currentUser.full_name || currentUser.email}
-            >
-              {userInitial}
-            </button>
+          <div className="ml-auto flex items-center gap-3">
+            {/* Cart Button & Dropdown */}
+            <div className="relative" ref={cartMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCartOpen((prev) => !prev);
+                  if (!isCartOpen) void fetchCart(false);
+                }}
+                className={`relative p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer ${
+                  isCartBouncing ? "animate-bounce ring-2 ring-blue-500 text-blue-600 bg-blue-50" : ""
+                }`}
+                title="View Cart"
+              >
+                <CartIcon className="h-6 w-6" />
+                {cartCount > 0 && (
+                  <span
+                    className={`absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-md shadow-blue-500/40 transition-transform ${
+                      isCartBouncing ? "scale-125 bg-emerald-500" : ""
+                    }`}
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </button>
 
-            {isProfileMenuOpen && (
-              <div className="absolute right-0 top-11 w-52 bg-white rounded-2xl p-3 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-2 py-1">
-                  <p className="text-xs font-bold text-slate-900 truncate">
-                    {currentUser.full_name || currentUser.email.split("@")[0]}
-                  </p>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {currentUser.email}
-                  </p>
+              <CartDrawer
+                isOpen={isCartOpen}
+                onClose={() => setIsCartOpen(false)}
+                cartItems={cartItems}
+                isLoading={isLoadingCart}
+              />
+            </div>
+
+            {/* User Profile Initial & Dropdown */}
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                className="h-9 w-9 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shadow-md shadow-blue-500/25 hover:bg-blue-500 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
+                title={currentUser.full_name || currentUser.email}
+              >
+                {userInitial}
+              </button>
+
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-11 w-52 bg-white rounded-2xl p-3 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-2 py-1">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {currentUser.full_name || currentUser.email.split("@")[0]}
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      {currentUser.email}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-slate-100 my-2" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Log Out
+                  </button>
                 </div>
-
-                <div className="border-t border-slate-100 my-2" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsProfileMenuOpen(false);
-                    handleLogout();
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Log Out
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </header>
 
@@ -271,3 +384,4 @@ function App() {
 }
 
 export default App;
+

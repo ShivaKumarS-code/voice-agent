@@ -19,6 +19,8 @@ interface VoiceAgentOptions {
   onAgentAudio?: (audio: ArrayBuffer) => boolean;
   /** Fires when the caller finishes a turn, for barge-in. */
   onUserSpeech?: () => void;
+  /** Fires when the agent modifies the cart during a turn. */
+  onCartUpdated?: () => void;
 }
 
 export function useVoiceAgent(options: VoiceAgentOptions = {}) {
@@ -175,6 +177,10 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
               setIsThinking(true);
               // Barge-in: drop whatever the avatar still has queued.
               optionsRef.current.onUserSpeech?.();
+            }
+
+            if (data.type === "cart_updated" || data.cart_updated) {
+              optionsRef.current.onCartUpdated?.();
             }
 
             if (data.response) {
@@ -338,6 +344,10 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
         }
 
         const data = await response.json();
+
+        if (data.cart_updated) {
+          optionsRef.current.onCartUpdated?.();
+        }
 
         addMessage("agent", data.response);
       } catch (caught) {

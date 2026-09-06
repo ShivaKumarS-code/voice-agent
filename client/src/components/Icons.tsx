@@ -342,3 +342,25 @@ export function AppleIcon({ className }: IconProps) {
   );
 }
 
+export function CartIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M2.25 3h2.25l1.8 11.25a2.25 2.25 0 0 0 2.22 1.89h10.36a2.25 2.25 0 0 0 2.22-1.85l1.35-7.41H6.15"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="19.5" r="1.5" fill="currentColor" />
+      <circle cx="17.5" cy="19.5" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+

@@ -5,8 +5,10 @@ from deepgram.core.events import EventType
 
 from app.auth.security import get_current_user_ws
 from app.db.database import get_session
+from app.routes.auth import resolve_customer_id
 from app.services.speech_to_text import SpeechToText
 from app.services.text_to_speech import TextToSpeech
+from app.agent.helpers import is_cart_updated_in_turn
 
 
 router = APIRouter()
@@ -24,6 +26,9 @@ async def speech_to_text(
     session = next(get_session())
     try:
         user = get_current_user_ws(token, session)
+        # Resolved here because the session closes below, and the websocket
+        # then runs for the whole call with no request-scoped session of its own.
+        customer_id = resolve_customer_id(user, session) if user else None
     finally:
         session.close()
 
@@ -56,8 +61,24 @@ async def speech_to_text(
 
                     config = {
                         "configurable": {
-                            "thread_id": thread_id
-                        }
+                            "thread_id": thread_id,
+                            # The cart and order tools all need a customer_id,
+                            # and the agent has no other way to learn who it is
+                            # talking to, so it would ask the customer to
+                            # recite an id they have never seen.
+                            "customer_id": customer_id,
+                            "customer_email": user.email,
+                            "customer_name": user.full_name,
+                        },
+                        # LangSmith trace labelling. thread_id is picked up
+                        # from configurable automatically, which is what
+                        # groups a user's turns into one thread.
+                        "run_name": "voice-turn",
+                        "tags": ["voice"],
+                        "metadata": {
+                            "channel": "voice",
+                            "user_email": user.email,
+                        },
                     }
 
 
@@ -78,9 +99,18 @@ async def speech_to_text(
                     )
 
                     # --------------------------------------------------
+                    # Check if cart was updated during graph execution
+                    # --------------------------------------------------
+                    messages = result.get("messages", [])
+                    if is_cart_updated_in_turn(messages):
+                        await websocket.send_json({
+                            "type": "cart_updated"
+                        })
+
+                    # --------------------------------------------------
                     # Get agent response
                     # --------------------------------------------------
-                    response = result["messages"][-1].content
+                    response = messages[-1].content if messages else ""
 
                     print("Agent:", response)
 

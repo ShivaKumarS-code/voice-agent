@@ -4,6 +4,7 @@ from app.routes.chat import router as chat_router
 from app.routes.voice import router as voice_router
 from app.routes.simli import router as simli_router
 from app.routes.auth import router as auth_router
+from app.routes.cart import router as cart_router
 
 from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -43,6 +44,17 @@ async def lifespan(app: FastAPI):
         checkpointer=checkpointer
     )
 
+    if settings.LANGSMITH_TRACING:
+        print(
+            "LangSmith tracing enabled -> project "
+            f"{settings.LANGSMITH_PROJECT!r}"
+        )
+    else:
+        print(
+            "LangSmith tracing disabled "
+            "(set LANGSMITH_API_KEY to enable)"
+        )
+
     yield
     pool.close()
 
@@ -61,6 +73,7 @@ app.include_router(chat_router)
 app.include_router(voice_router)
 app.include_router(simli_router)
 app.include_router(auth_router)
+app.include_router(cart_router)
 
 
 
