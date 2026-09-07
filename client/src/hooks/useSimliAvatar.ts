@@ -151,9 +151,9 @@ export function useSimliAvatar() {
         setIsSpeaking(false);
       });
 
-      client.on("error", (detail) => setError(String(detail)));
+      client.on("error", (detail: unknown) => setError(String(detail)));
 
-      client.on("startup_error", (message) => {
+      client.on("startup_error", (message: unknown) => {
         setError(String(message));
         setStatus("error");
       });
