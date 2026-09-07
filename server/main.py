@@ -14,6 +14,14 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Without this the pool raises somewhere inside libpq about a missing host,
+    # which is a long way from the actual problem.
+    if not settings.DB_URI:
+        raise RuntimeError(
+            "DATABASE_URL is not set. The agent keeps its conversation "
+            "checkpoints in Postgres and cannot start without it."
+        )
+
     pool = ConnectionPool(
         conninfo=settings.DB_URI,
         min_size=1,
@@ -61,9 +69,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan)
 
+# Origins are listed rather than wildcarded. "*" is not interchangeable with a
+# list here: it is rejected outright by browsers once allow_credentials is on,
+# and it would let any page a customer visits call this API with their session.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

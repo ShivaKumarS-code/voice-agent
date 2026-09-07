@@ -1,5 +1,9 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// Trailing slash trimmed because every caller passes a path that starts with
+// one, and "https://api.example.com/" would otherwise produce "//chat/". Some
+// hosts serve that as a redirect, which drops the Authorization header.
+const API_BASE = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
 
 export const apiUrl = (path: string) => `${API_BASE}${path}`;
 

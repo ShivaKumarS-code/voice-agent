@@ -1,6 +1,7 @@
 import json
 
 from langchain.messages import ToolMessage
+from langgraph.types import Command
 
 CART_MODIFICATION_TOOLS = {
     "add_to_cart",
@@ -116,6 +117,56 @@ def pending_interrupt(result: dict) -> dict | None:
     value = getattr(interrupts[0], "value", None)
 
     return value if isinstance(value, dict) else {"type": "confirmation"}
+
+
+STALE_CONFIRMATION_REPLY = (
+    "That confirmation isn't waiting on an answer any more. Just ask me to "
+    "check out again if you still want to place the order."
+)
+
+
+def has_pending_confirmation(graph, config: dict) -> bool:
+    """
+    True when the thread is parked inside a tool waiting on an answer.
+
+    A parked thread cannot reply to anything else. LangGraph re-runs the
+    pending task on the next invoke, so a new message re-raises the same
+    interrupt rather than being answered -- and it does that for every message
+    after it too, which leaves the customer permanently unable to get a reply.
+    Callers check this before invoking so they can deal with the pause instead
+    of walking into it.
+
+    A thread that has never run has no state and no tasks, so this is also what
+    distinguishes a real resume from one with nothing behind it.
+    """
+    snapshot = graph.get_state(config)
+
+    return any(task.interrupts for task in getattr(snapshot, "tasks", ()))
+
+
+def discard_pending_confirmation(graph, config: dict) -> bool:
+    """
+    Declines a confirmation the customer never answered, freeing the thread.
+
+    This is the dropped call and the closed tab: the order dialog was on screen
+    and nothing came back. Declining is the only safe reading of silence, and
+    it is also the cheap one -- the decline path leaves the cart exactly as it
+    was, so the customer loses nothing but the prompt and can ask to check out
+    again. Approving on their behalf would place a real order they never
+    confirmed.
+
+    Returns True when a pause was actually cleared.
+    """
+    if not has_pending_confirmation(graph, config):
+        return False
+
+    # Runs the tool's decline branch and whatever the model says about it. The
+    # reply is discarded: it answers a question the customer has already walked
+    # away from. It stays in the transcript, which is what stops the model
+    # bringing the abandoned order up again as though it were still open.
+    graph.invoke(Command(resume={"approved": False}), config=config)
+
+    return True
 
 
 def is_cart_updated_in_turn(messages: list) -> bool:
