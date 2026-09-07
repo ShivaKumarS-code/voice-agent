@@ -1,13 +1,19 @@
 from langgraph.graph import StateGraph, MessagesState, END, START
-from langchain.messages import RemoveMessage, SystemMessage
+from langchain.messages import AIMessage, RemoveMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langchain_core.runnables import RunnableConfig
 from app.config import settings
 from app.tools.rag import search_knowledge_base
 from app.tools.orders import search_orders, get_order, cancel_order, request_return, request_replacement, process_refund
 from app.tools.cart import get_cart, add_to_cart, update_cart_item, remove_from_cart, clear_cart
+from app.tools.checkout import place_order
 from app.tools.product import get_all_products, search_products
-from app.agent.helpers import find_summary_cutoff, sanitize_tool_messages
+from app.agent.helpers import (
+    PROVIDER_FAILURE_REPLY,
+    find_summary_cutoff,
+    is_tool_call_generation_failure,
+    sanitize_tool_messages,
+)
 from langgraph.prebuilt import ToolNode
 
 
@@ -44,6 +50,7 @@ tools = [
     update_cart_item,
     remove_from_cart,
     clear_cart,
+    place_order,
     get_all_products,
     search_products
     ]
@@ -120,31 +127,37 @@ Markdown, no headings, no bullet points. Be brief.
 CUSTOMER_CONTEXT_TEMPLATE = """
 CUSTOMER CONTEXT:
 
-You are already speaking with a signed-in customer, and these details are
-known. Never ask the customer to provide or confirm them.
+You are speaking with a signed-in customer.
 
 {details}
 
-Use this customer_id whenever a tool asks for one, and this email whenever a
-tool asks for an account email. Use only these values, even if the customer
-asks you to look at a different account. Do not read the customer_id out loud;
-it is for tool calls only.
+The cart and order tools already know which account this is, so they act on
+this customer without being told who they are. Never ask the customer for an
+account id, and never ask them to confirm their identity.
+
+These tools only ever reach this customer's own account. If the customer asks
+about someone else's cart or orders, tell them you can only help with their
+own account.
 """
 
 
 def build_system_prompt(summary: str, configurable: dict) -> str:
     sections = [SYSTEM_PROMPT]
 
-    customer_id = configurable.get("customer_id")
+    if configurable.get("customer_id"):
+        # The id itself is deliberately left out: the tools take it from
+        # config, so telling the model would only give it something to read
+        # aloud or repeat back.
+        details = []
 
-    if customer_id:
-        details = [f"- customer_id: {customer_id}"]
+        if configurable.get("customer_name"):
+            details.append(f"- name: {configurable['customer_name']}")
 
         if configurable.get("customer_email"):
             details.append(f"- email: {configurable['customer_email']}")
 
-        if configurable.get("customer_name"):
-            details.append(f"- name: {configurable['customer_name']}")
+        if not details:
+            details.append("- no name or email is on file for this account")
 
         sections.append(
             CUSTOMER_CONTEXT_TEMPLATE.format(
@@ -163,8 +176,14 @@ def build_system_prompt(summary: str, configurable: dict) -> str:
     return "\n\n".join(sections)
 
 
+# A tool_use_failed rejection is the model garbling its own tool call, so the
+# same request usually succeeds on a second attempt. One retry, because a
+# customer is waiting on the other end of this.
+TOOL_CALL_RETRIES = 1
+
+
 def chatbot(state: AgentState, config: RunnableConfig):
-    response = llm_with_tools.invoke([
+    messages = [
         SystemMessage(
             content=build_system_prompt(
                 state.get("summary") or "",
@@ -172,9 +191,20 @@ def chatbot(state: AgentState, config: RunnableConfig):
             )
         ),
         *sanitize_tool_messages(state['messages'])
-    ])
+    ]
 
-    return {'messages': [response]}
+    for attempt in range(TOOL_CALL_RETRIES + 1):
+        try:
+            return {'messages': [llm_with_tools.invoke(messages)]}
+        except Exception as error:
+            if not is_tool_call_generation_failure(error):
+                raise
+
+            print(f"Tool call generation failed (attempt {attempt + 1}):", error)
+
+    # Out of retries. Answering badly beats a 500: the caller has a reply to
+    # speak, and the transcript stays usable for the next turn.
+    return {'messages': [AIMessage(content=PROVIDER_FAILURE_REPLY)]}
 
 
 def summarize_conversation(state: AgentState):

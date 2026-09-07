@@ -6,9 +6,15 @@ from app.db.models import Product
 
 
 @tool
-def get_all_products() -> dict:
-    """Get all active products available in the store."""
+def get_all_products(customer_request: str = "") -> dict:
+    """
+    Get all active products available in the store.
 
+    customer_request is what the customer asked for, in their own words.
+    """
+
+    # customer_request is deliberately unused: it exists so the tool has a
+    # parameter for the model to fill in. See app.tools.model_quirks.
     with Session(engine) as session:
         products = session.exec(
             select(Product)

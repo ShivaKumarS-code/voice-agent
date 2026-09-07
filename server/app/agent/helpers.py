@@ -2,7 +2,14 @@ import json
 
 from langchain.messages import ToolMessage
 
-CART_MODIFICATION_TOOLS = {"add_to_cart", "update_cart_item", "remove_from_cart", "clear_cart"}
+CART_MODIFICATION_TOOLS = {
+    "add_to_cart",
+    "update_cart_item",
+    "remove_from_cart",
+    "clear_cart",
+    # Placing an order empties the cart, so the badge has to refresh for it too.
+    "place_order",
+}
 
 EMPTY_TOOL_RESULT_TEXT = "The tool returned no result."
 
@@ -75,6 +82,40 @@ def _tool_reported_success(msg) -> bool:
         return bool(payload["success"])
 
     return True
+
+
+PROVIDER_FAILURE_REPLY = (
+    "Sorry, I lost my train of thought there. Could you say that again?"
+)
+
+
+def is_tool_call_generation_failure(error: Exception) -> bool:
+    """
+    True when the provider rejected the model's own tool call as unparseable.
+
+    Groq returns a 400 with code tool_use_failed when the model emits arguments
+    that are not valid JSON. Nothing has run and nothing is saved, so the turn
+    is worth retrying, unlike a bad request the caller built. It is checked by
+    message text because the provider reports it as a generic BadRequestError.
+    """
+    return "tool_use_failed" in str(error)
+
+
+def pending_interrupt(result: dict) -> dict | None:
+    """
+    The payload of a confirmation the graph is waiting on, if it paused.
+
+    A paused turn has no assistant reply yet, so callers must send the payload
+    to the client instead of reading the last message as an answer.
+    """
+    interrupts = (result or {}).get("__interrupt__")
+
+    if not interrupts:
+        return None
+
+    value = getattr(interrupts[0], "value", None)
+
+    return value if isinstance(value, dict) else {"type": "confirmation"}
 
 
 def is_cart_updated_in_turn(messages: list) -> bool:

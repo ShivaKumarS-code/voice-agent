@@ -1,13 +1,47 @@
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from sqlmodel import Session, select
 
 from app.db.database import engine
 from app.db.models import Cart, CartItem, Customer, Product
 
+NO_CUSTOMER_RESULT = {
+    "success": False,
+    "message": (
+        "No signed-in customer is available, so the cart cannot be read or "
+        "changed. Ask the customer to sign in."
+    ),
+}
+
+
+def customer_id_from_config(config: RunnableConfig) -> str | None:
+    """
+    The signed-in customer's id, supplied by the caller through config.
+
+    Every cart tool reads the id from here rather than taking it as an
+    argument, so the model can neither see it nor choose it: a `config`
+    parameter is stripped from the schema the model is shown, and a `config`
+    the model invents in a tool call is discarded instead of merged. That
+    makes "show me someone else's cart" unrepresentable rather than merely
+    discouraged by the prompt.
+    """
+    return ((config or {}).get("configurable") or {}).get("customer_id")
+
 
 @tool
-def get_cart(customer_id: str) -> dict:
-    """Get the current contents of a customer's cart."""
+def get_cart(config: RunnableConfig, customer_request: str = "") -> dict:
+    """
+    Get the current contents of the signed-in customer's cart.
+
+    customer_request is what the customer asked for, in their own words.
+    """
+
+    # customer_request is deliberately unused: it exists so the tool has a
+    # parameter for the model to fill in. See app.tools.model_quirks.
+    customer_id = customer_id_from_config(config)
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         customer = session.get(Customer, customer_id)
@@ -75,17 +109,22 @@ def get_cart(customer_id: str) -> dict:
 
 @tool
 def add_to_cart(
-    customer_id: str,
     product_name: str,
     quantity: int,
+    config: RunnableConfig,
 ) -> dict:
-    """Add a product to a customer's cart."""
+    """Add a product to the signed-in customer's cart."""
 
     if quantity <= 0:
         return {
             "success": False,
             "message": "Quantity must be greater than zero.",
         }
+
+    customer_id = customer_id_from_config(config)
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         customer = session.get(Customer, customer_id)
@@ -192,11 +231,18 @@ def add_to_cart(
 
 @tool
 def update_cart_item(
-    customer_id: str,
     product_name: str,
     quantity: int,
+    config: RunnableConfig,
 ) -> dict:
-    """Update the quantity of a product in a customer's cart."""
+    """
+    Set the quantity of a product already in the signed-in customer's cart.
+
+    quantity is the total the cart should end up with, not a change to it, so
+    use this when the customer names that total ("make it three", "change it
+    to one"). Use remove_from_cart with a quantity when they describe a
+    change instead ("remove one", "take two off").
+    """
 
     if quantity <= 0:
         return {
@@ -206,6 +252,11 @@ def update_cart_item(
                 "Use remove_from_cart to remove the item."
             ),
         }
+
+    customer_id = customer_id_from_config(config)
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         customer = session.get(Customer, customer_id)
@@ -302,10 +353,32 @@ def update_cart_item(
 
 @tool
 def remove_from_cart(
-    customer_id: str,
     product_name: str,
+    config: RunnableConfig,
+    quantity: int | None = None,
 ) -> dict:
-    """Remove a product from a customer's cart."""
+    """
+    Remove a product from the signed-in customer's cart, or reduce how many of it they have.
+
+    Pass quantity to take that many units off the line, for a request like
+    "remove one of those" or "drop two". Leave quantity out to remove the
+    product entirely, however many of it are in the cart. Removing as many
+    units as are in the cart removes the line.
+
+    Use update_cart_item instead when the customer names the total they want
+    to end up with, such as "make it three".
+    """
+
+    if quantity is not None and quantity <= 0:
+        return {
+            "success": False,
+            "message": "Quantity to remove must be greater than zero.",
+        }
+
+    customer_id = customer_id_from_config(config)
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         customer = session.get(Customer, customer_id)
@@ -361,6 +434,33 @@ def remove_from_cart(
                 ),
             }
 
+        previous_quantity = cart_item.quantity
+
+        # A partial removal only decrements the line. Asking to remove at
+        # least as many as are there is the same as removing the product.
+        if quantity is not None and quantity < previous_quantity:
+            cart_item.quantity = previous_quantity - quantity
+
+            session.add(cart_item)
+            session.commit()
+            session.refresh(cart_item)
+
+            return {
+                "success": True,
+                "cart_item_id": str(cart_item.id),
+                "product_id": str(product.id),
+                "product_name": product.name,
+                "removed_quantity": quantity,
+                # The remaining count is returned so the reply can state it
+                # instead of inferring it.
+                "quantity": cart_item.quantity,
+                "price": float(product.price),
+                "message": (
+                    f"Removed {quantity} x {product.name}. "
+                    f"{cart_item.quantity} left in the cart."
+                ),
+            }
+
         session.delete(cart_item)
         session.commit()
 
@@ -368,6 +468,8 @@ def remove_from_cart(
             "success": True,
             "product_id": str(product.id),
             "product_name": product.name,
+            "removed_quantity": previous_quantity,
+            "quantity": 0,
             "message": (
                 f"{product.name} removed from cart."
             ),
@@ -375,8 +477,19 @@ def remove_from_cart(
 
 
 @tool
-def clear_cart(customer_id: str) -> dict:
-    """Remove all items from a customer's cart."""
+def clear_cart(config: RunnableConfig, customer_request: str = "") -> dict:
+    """
+    Remove all items from the signed-in customer's cart.
+
+    customer_request is what the customer asked for, in their own words.
+    """
+
+    # customer_request is deliberately unused: it exists so the tool has a
+    # parameter for the model to fill in. See app.tools.model_quirks.
+    customer_id = customer_id_from_config(config)
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         customer = session.get(Customer, customer_id)

@@ -1,23 +1,45 @@
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from app.db.models import Customer, Order, OrderItem, Shipment, Return, Replacement, Refund
 from sqlmodel import Session, select
 from app.db.database import engine
 from datetime import datetime
 
+NO_CUSTOMER_RESULT = {
+    "success": False,
+    "message": (
+        "No signed-in customer is available, so orders cannot be looked up. "
+        "Ask the customer to sign in."
+    ),
+}
+
+
 @tool
-def search_orders(email: str) -> dict:
-    """Find a customer's orders using their account email."""
+def search_orders(config: RunnableConfig, customer_request: str = "") -> dict:
+    """
+    List the signed-in customer's orders.
+
+    customer_request is what the customer asked for, in their own words.
+    """
+
+    # customer_request is deliberately unused: it exists so the tool has a
+    # parameter for the model to fill in. See app.tools.model_quirks.
+    #
+    # Read from config, not from an argument: the caller establishes whose
+    # orders these are, so the model cannot ask for another account's.
+    customer_id = ((config or {}).get("configurable") or {}).get("customer_id")
+
+    if not customer_id:
+        return {**NO_CUSTOMER_RESULT, "orders": []}
 
     with Session(engine) as session:
-        customer = session.exec(
-            select(Customer).where(Customer.email == email)
-        ).first()
+        customer = session.get(Customer, customer_id)
 
         if not customer:
             return {
                 "success": False,
                 "orders": [],
-                "message": "No customer was found with that email.",
+                "message": "No customer record was found for this account.",
             }
 
         orders = session.exec(
@@ -58,15 +80,40 @@ def search_orders(email: str) -> dict:
             "orders": results,
         }
 
+def _load_owned_order(session, order_id: str, config: RunnableConfig):
+    """
+    Loads an order only if it belongs to the signed-in customer.
+
+    Returns (order, error). An order belonging to someone else is reported as
+    not found rather than as forbidden: confirming that an id exists would
+    leak that much on its own, and there is nothing the customer could do
+    with the distinction.
+    """
+    customer_id = ((config or {}).get("configurable") or {}).get("customer_id")
+
+    if not customer_id:
+        return None, NO_CUSTOMER_RESULT
+
+    order = session.get(Order, order_id)
+
+    if not order or str(order.customer_id) != str(customer_id):
+        return None, {
+            "success": False,
+            "message": "Order not found for this account.",
+        }
+
+    return order, None
+
+
 @tool
-def get_order(order_id: str) -> dict:
-    """Get complete details for a specific order."""
+def get_order(order_id: str, config: RunnableConfig) -> dict:
+    """Get complete details for one of the signed-in customer's orders."""
 
     with Session(engine) as session:
-        order = session.get(Order, order_id)
+        order, error = _load_owned_order(session, order_id, config)
 
-        if not order:
-            return {"error": "Order not found"}
+        if error:
+            return error
 
         customer = session.get(Customer, order.customer_id)
 
@@ -113,17 +160,14 @@ def get_order(order_id: str) -> dict:
         }
 
 @tool
-def cancel_order(order_id: str) -> dict:
-    """Cancel an order if it has not already been shipped or delivered."""
+def cancel_order(order_id: str, config: RunnableConfig) -> dict:
+    """Cancel one of the signed-in customer's orders, if it has not shipped."""
 
     with Session(engine) as session:
-        order = session.get(Order, order_id)
+        order, error = _load_owned_order(session, order_id, config)
 
-        if not order:
-            return {
-                "success": False,
-                "message": "Order not found."
-            }
+        if error:
+            return error
 
         if order.status in {"shipped", "delivered", "cancelled"}:
             return {
@@ -144,16 +188,13 @@ def cancel_order(order_id: str) -> dict:
         }
 
 @tool
-def request_return(order_id: str, order_item_id: str, reason: str) -> dict:
-    """Submit a return request for a specific item in an order."""
+def request_return(order_id: str, order_item_id: str, reason: str, config: RunnableConfig) -> dict:
+    """Submit a return request for an item in one of the signed-in customer's orders."""
     with Session(engine) as session:
-        order = session.get(Order, order_id)
+        order, error = _load_owned_order(session, order_id, config)
 
-        if not order:
-            return {
-                "success": False,
-                "message": "Order not found."
-            }
+        if error:
+            return error
 
         if order.status != "delivered":
             return {
@@ -211,17 +252,15 @@ def request_replacement(
     order_id: str,
     order_item_id: str,
     reason: str,
+    config: RunnableConfig,
 ) -> dict:
-    """Request a replacement for a defective or damaged item."""
+    """Request a replacement for a defective or damaged item in the signed-in customer's order."""
 
     with Session(engine) as session:
-        order = session.get(Order, order_id)
+        order, error = _load_owned_order(session, order_id, config)
 
-        if not order:
-            return {
-                "success": False,
-                "message": "Order not found.",
-            }
+        if error:
+            return error
 
         if order.status != "delivered":
             return {
@@ -275,16 +314,33 @@ def request_replacement(
         }
 
 @tool
-def process_refund(return_id: str) -> dict:
-    """Process a refund for an eligible return."""
+def process_refund(return_id: str, config: RunnableConfig) -> dict:
+    """Process a refund for an eligible return on the signed-in customer's order."""
+
+    customer_id = ((config or {}).get("configurable") or {}).get("customer_id")
+
+    if not customer_id:
+        return NO_CUSTOMER_RESULT
 
     with Session(engine) as session:
         return_request = session.get(Return, return_id)
 
-        if not return_request:
+        # Ownership runs through the return's order, since a return id is the
+        # only thing named here.
+        owning_order = (
+            session.get(Order, return_request.order_id)
+            if return_request
+            else None
+        )
+
+        if (
+            not return_request
+            or not owning_order
+            or str(owning_order.customer_id) != str(customer_id)
+        ):
             return {
                 "success": False,
-                "message": "Return request not found.",
+                "message": "Return request not found for this account.",
             }
 
         if return_request.status not in {"pending", "approved"}:

@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from langgraph.types import Command
 from sqlmodel import Session
 
 from app.auth.security import get_current_user
 from app.db.database import get_session
 from app.db.models import User
 from app.models.chat import ChatRequest
-from app.agent.helpers import is_cart_updated_in_turn
+from app.agent.helpers import is_cart_updated_in_turn, pending_interrupt
 from app.routes.auth import resolve_customer_id
 
 router = APIRouter(prefix='/chat')
@@ -40,20 +41,41 @@ def chat(
 
     graph = request.app.state.graph
 
-    result = graph.invoke({
-        "messages": [
-            {
-                'role': 'user',
-                'content': data.message
-            }
-        ]
-    }, config=config)
+    if data.approved is not None:
+        # Answering a confirmation resumes the paused turn rather than starting
+        # a new one, so no message is added to the transcript.
+        payload = Command(resume={"approved": data.approved})
+    elif data.message:
+        payload = {
+            "messages": [
+                {
+                    'role': 'user',
+                    'content': data.message
+                }
+            ]
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Send either a message or an approval.",
+        )
+
+    result = graph.invoke(payload, config=config)
 
     messages = result.get('messages', [])
-    response = messages[-1].content if messages else ""
-    cart_updated = is_cart_updated_in_turn(messages)
+    confirmation = pending_interrupt(result)
+
+    if confirmation:
+        # The graph is parked inside the tool, so there is no reply to speak
+        # yet: the client shows the prompt and sends the answer back.
+        return {
+            'response': "",
+            'cart_updated': False,
+            'confirmation': confirmation,
+        }
 
     return {
-        'response': response,
-        'cart_updated': cart_updated
+        'response': messages[-1].content if messages else "",
+        'cart_updated': is_cart_updated_in_turn(messages),
+        'confirmation': None,
     }

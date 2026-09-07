@@ -5,6 +5,7 @@ import { getAuthHeaders, getToken } from "../lib/auth";
 import { apiUrl, wsUrl } from "../lib/config";
 import { createId, formatTime } from "../lib/format";
 
+import type { OrderConfirmation } from "../components/OrderConfirmDialog";
 import type { CallStatus, Message, Role } from "../lib/types";
 
 // Deepgram STT expects 16 kHz mono PCM.
@@ -30,6 +31,9 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
   const [isThinking, setIsThinking] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Set while the agent is parked inside place_order waiting on an answer.
+  const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const websocketRef = useRef<WebSocket | null>(null);
   const captureContextRef = useRef<AudioContext | null>(null);
@@ -40,6 +44,10 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
   const playbackAnalyserRef = useRef<AnalyserNode | null>(null);
   const playingSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const mutedRef = useRef(false);
+  // The paused turn lives on whichever transport started it, and only that one
+  // can deliver the reply (the socket also speaks it), so the answer goes back
+  // the same way it came.
+  const confirmationTransportRef = useRef<"voice" | "text" | null>(null);
 
   // Keeps the latest callbacks without re-creating the whole audio graph.
   const optionsRef = useRef(options);
@@ -92,6 +100,13 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
     setIsThinking(false);
     setIsMuted(false);
     mutedRef.current = false;
+
+    // A dialog raised by a call cannot be answered once the socket is gone.
+    if (confirmationTransportRef.current === "voice") {
+      setConfirmation(null);
+      confirmationTransportRef.current = null;
+      setIsConfirming(false);
+    }
   }, []);
 
   /**
@@ -181,6 +196,15 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
 
             if (data.type === "cart_updated" || data.cart_updated) {
               optionsRef.current.onCartUpdated?.();
+            }
+
+            if (data.type === "confirmation_required" && data.confirmation) {
+              // The turn is paused server-side, so stop the thinking
+              // indicator and hand over to the dialog.
+              setIsThinking(false);
+              setIsConfirming(false);
+              confirmationTransportRef.current = "voice";
+              setConfirmation(data.confirmation as OrderConfirmation);
             }
 
             if (data.response) {
@@ -349,7 +373,15 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
           optionsRef.current.onCartUpdated?.();
         }
 
-        addMessage("agent", data.response);
+        if (data.confirmation) {
+          confirmationTransportRef.current = "text";
+          setConfirmation(data.confirmation as OrderConfirmation);
+          return;
+        }
+
+        if (data.response) {
+          addMessage("agent", data.response);
+        }
       } catch (caught) {
         setError(
           caught instanceof Error
@@ -363,6 +395,82 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
     [addMessage],
   );
 
+  /** Answers a pending order confirmation on the transport that raised it. */
+  const answerConfirmation = useCallback(
+    async (approved: boolean) => {
+      if (!confirmation) return;
+
+      const transport = confirmationTransportRef.current;
+
+      setIsConfirming(true);
+
+      if (transport === "voice") {
+        const websocket = websocketRef.current;
+
+        if (websocket?.readyState !== WebSocket.OPEN) {
+          // The call ended while the dialog was open. The turn stays parked
+          // server-side and resumes on the next connection, so surface it
+          // rather than pretending the order went through.
+          setIsConfirming(false);
+          setConfirmation(null);
+          confirmationTransportRef.current = null;
+          setError("The call ended before the order was confirmed");
+          return;
+        }
+
+        websocket.send(
+          JSON.stringify({ type: "confirmation_response", approved }),
+        );
+
+        setConfirmation(null);
+        confirmationTransportRef.current = null;
+        setIsConfirming(false);
+        setIsThinking(true);
+        return;
+      }
+
+      setIsThinking(true);
+
+      try {
+        const response = await fetch(apiUrl("/chat/"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ approved }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.cart_updated) {
+          optionsRef.current.onCartUpdated?.();
+        }
+
+        if (data.response) {
+          addMessage("agent", data.response);
+        }
+
+        setConfirmation(null);
+        confirmationTransportRef.current = null;
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Could not send the confirmation",
+        );
+      } finally {
+        setIsConfirming(false);
+        setIsThinking(false);
+      }
+    },
+    [addMessage, confirmation],
+  );
+
   useEffect(() => teardown, [teardown]);
 
   return {
@@ -372,11 +480,14 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
     isThinking,
     messages,
     error,
+    confirmation,
+    isConfirming,
     analyserRef: activeAnalyserRef,
     startCall,
     stopCall,
     toggleMute,
     sendText,
+    answerConfirmation,
     dismissError: useCallback(() => setError(null), []),
   };
 }

@@ -17,5 +17,9 @@ def read_cart(
 ):
     customer_id = resolve_customer_id(current_user, session)
 
-    result = get_cart.invoke({"customer_id": customer_id})
-    return result
+    # get_cart takes the customer from config rather than from an argument, so
+    # this route supplies it the same way the agent's graph does.
+    return get_cart.invoke(
+        {},
+        config={"configurable": {"customer_id": customer_id}},
+    )

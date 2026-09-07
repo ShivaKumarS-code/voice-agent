@@ -93,7 +93,7 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
                 <div className="min-w-0 pr-2">
                   <h4 className="text-xs font-semibold text-slate-800 truncate">{item.product_name}</h4>
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                    <span>${formatPrice(item.price)}</span>
+                    <span>₹{formatPrice(item.price)}</span>
                     <span>&bull;</span>
                     <span className="font-medium text-slate-600">Qty: {item.quantity}</span>
                   </div>
@@ -101,7 +101,7 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
 
                 <div className="shrink-0 text-right">
                   <span className="text-xs font-bold text-blue-600">
-                    ${formatPrice(toNumber(item.price) * toNumber(item.quantity))}
+                    ₹{formatPrice(toNumber(item.price) * toNumber(item.quantity))}
                   </span>
                 </div>
               </div>
@@ -116,7 +116,7 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">Total Subtotal</span>
             <span className="text-sm font-bold text-slate-900 tracking-tight">
-              ${formatPrice(totalAmount)}
+              ₹{formatPrice(totalAmount)}
             </span>
           </div>
           <p className="text-[10px] text-slate-400 text-center leading-normal">

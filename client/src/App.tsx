@@ -12,6 +12,7 @@ import {
   WaveIcon,
 } from "./components/Icons";
 import { LoginPage } from "./components/LoginPage";
+import { OrderConfirmDialog } from "./components/OrderConfirmDialog";
 import { useSimliAvatar } from "./hooks/useSimliAvatar";
 import type { AvatarStatus } from "./hooks/useSimliAvatar";
 import { useVoiceAgent } from "./hooks/useVoiceAgent";
@@ -143,11 +144,14 @@ function App() {
     isThinking,
     messages,
     error,
+    confirmation,
+    isConfirming,
     analyserRef,
     startCall,
     stopCall,
     toggleMute,
     sendText,
+    answerConfirmation,
     dismissError,
   } = useVoiceAgent({
     onAgentAudio: avatar.sendAudio,
@@ -359,6 +363,13 @@ function App() {
 
           </div>
         </div>
+
+        <OrderConfirmDialog
+          confirmation={confirmation}
+          isSubmitting={isConfirming}
+          onApprove={() => void answerConfirmation(true)}
+          onDecline={() => void answerConfirmation(false)}
+        />
 
         {/* Feature strip */}
         <div className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3 sm:gap-6">
