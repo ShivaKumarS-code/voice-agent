@@ -174,21 +174,6 @@ Fifteen tools, all acting only on the signed-in customer:
   `request_replacement`, `process_refund`
 - **Knowledge** — `search_knowledge_base`
 
-No tool takes a customer id as an argument. The route resolves it from the JWT
-and passes it through LangGraph's config, which is hidden from the model and
-ignored if the model tries to supply it — so acting on another account is
-unrepresentable rather than merely discouraged by the prompt.
-
-`place_order` is the only tool that pauses. It builds a read-only order preview,
-then interrupts; the turn returns a confirmation payload instead of a reply, and
-the customer's answer resumes the same thread. The write half re-reads the cart
-rather than trusting the preview, since stock and prices can move while the
-customer is deciding.
-
-Replies go straight to a TTS engine, so the system prompt forbids Markdown,
-bullet points, tables and emoji, and asks for figures written the way they
-should be spoken.
-
 ## Knowledge base
 
 `server/knowledge_base/` holds eight markdown documents covering accounts,
