@@ -35,8 +35,19 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
   );
 
   return (
-    <div className="absolute right-0 top-11 w-[calc(100vw-2.5rem)] max-w-[22rem] sm:w-96 bg-white rounded-2xl p-3.5 sm:p-4 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
-      {/* Header */}
+    <>
+      {/* Mobile backdrop to easily tap away and dismiss */}
+      <div
+        className="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-xs sm:hidden"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-hidden="true"
+      />
+
+      <div className="fixed left-3.5 right-3.5 top-[4.25rem] z-50 mx-auto max-w-sm bg-white rounded-2xl p-3.5 shadow-2xl ring-1 ring-slate-200/80 animate-in fade-in zoom-in-95 duration-150 sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:bottom-auto sm:w-96 sm:max-w-none sm:mx-0 sm:p-4 sm:shadow-xl">
+        {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -125,5 +136,6 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -225,7 +225,7 @@ function App() {
   return (
     <div className="app-backdrop flex min-h-screen w-full max-w-full items-center justify-center px-2.5 py-3 sm:px-6 sm:py-10 overflow-x-hidden">
       {/* min-w-0 so wide content can never inflate the card past 100% width */}
-      <div className="w-full max-w-[84rem] min-w-0 overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/60 sm:rounded-3xl sm:p-6">
+      <div className="w-full max-w-[64rem] min-w-0 overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/60 sm:rounded-3xl sm:p-6">
         {/* Top bar */}
         <header className="flex items-center gap-2 pb-3.5 sm:gap-3 sm:pb-5">
           <LogoIcon className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 text-blue-600" />
