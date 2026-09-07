@@ -75,3 +75,74 @@ class Replacement(SQLModel, table=True):
     status: ReplacementStatus
     reason: str
     created_at: datetime
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    full_name: str | None = None
+    customer_id: UUID | None = Field(default=None, foreign_key="customers.id")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class UserCreate(SQLModel):
+    email: str
+    password: str
+    full_name: str | None = None
+
+
+class UserRead(SQLModel):
+    id: UUID
+    email: str
+    full_name: str | None = None
+    customer_id: UUID | None = None
+    is_active: bool
+    created_at: datetime
+
+
+
+class LoginRequest(SQLModel):
+    email: str
+    password: str
+
+
+class Token(SQLModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class TokenData(SQLModel):
+    sub: str | None = None
+    email: str | None = None
+
+class Cart(SQLModel, table=True):
+    __tablename__ = "carts"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    customer_id: UUID = Field(
+        foreign_key="customers.id",
+        unique=True,
+        index=True,
+    )
+
+class CartItem(SQLModel, table=True):
+    __tablename__ = "cart_items"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    cart_id: UUID = Field(foreign_key="carts.id")
+    product_id: UUID = Field(foreign_key="products.id")
+    quantity: int
+
+class Product(SQLModel, table=True):
+    __tablename__ = "products"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    description: str
+    price: Decimal
+    stock_quantity: int
+    is_active: bool = Field(default=True)

@@ -2,9 +2,10 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
 python-dotenv>=1.0.1
-langgraph 
-langchain 
-langchain-groq 
+langgraph
+langchain
+langchain-groq
+langsmith
 python-dotenv
 langchain_text_splitters
 langchain_google_genai
@@ -17,3 +18,9 @@ sqlmodel
 psycopg2
 deepgram-sdk
 elevenlabs
+httpx
+websockets
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+python-multipart>=0.0.9

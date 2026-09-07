@@ -1,1 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Valley+Sans:ital,wght@0,300..800;1,300..800&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: 'Valley Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/*
+  Backstop against a horizontal swipe on phones. Every part of this layout is
+  meant to fit the viewport width, so anything that does not is a bug worth
+  clipping rather than turning into a scroll axis. `hidden` on the root
+  propagates to the viewport and leaves vertical scrolling alone - `clip` would
+  force overflow-y to hidden and kill it.
+*/
+html, body {
+  overflow-x: hidden;
+  font-family: 'Valley Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+
+/*
+  Mesh gradient behind the card: four elliptical washes over a near-white base.
+  Each one fades to its own colour at zero alpha rather than to `transparent`,
+  so nothing interpolates through grey. Listed topmost-first, so the periwinkle
+  corner stays clean instead of being muddied by the sage above it.
+*/
+@utility app-backdrop {
+  background-color: #eeecf3;
+  background-image:
+    radial-gradient(
+      85% 105% at 100% 0%,
+      rgba(72, 106, 205, 0.95) 0%,
+      rgba(122, 150, 220, 0.4) 38%,
+      rgba(122, 150, 220, 0) 68%
+    ),
+    radial-gradient(
+      125% 95% at 0% 0%,
+      rgba(207, 228, 195, 0.9) 0%,
+      rgba(207, 228, 195, 0) 52%
+    ),
+    radial-gradient(
+      95% 75% at 58% 108%,
+      rgba(253, 224, 205, 0.95) 0%,
+      rgba(253, 224, 205, 0) 55%
+    ),
+    radial-gradient(
+      70% 85% at 100% 100%,
+      rgba(203, 193, 230, 0.85) 0%,
+      rgba(203, 193, 230, 0) 58%
+    );
+}
