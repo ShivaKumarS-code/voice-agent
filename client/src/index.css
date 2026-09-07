@@ -13,6 +13,7 @@
   force overflow-y to hidden and kill it.
 */
 html, body {
+  max-width: 100vw;
   overflow-x: hidden;
   font-family: 'Valley Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

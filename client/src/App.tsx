@@ -223,14 +223,14 @@ function App() {
 
   // When authenticated, render the main Voice Agent dashboard
   return (
-    <div className="app-backdrop flex min-h-screen items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
+    <div className="app-backdrop flex min-h-screen w-full max-w-full items-center justify-center px-2.5 py-3 sm:px-6 sm:py-10 overflow-x-hidden">
       {/* min-w-0 so wide content can never inflate the card past 100% width */}
-      <div className="w-full max-w-[84rem] min-w-0 rounded-3xl bg-white p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/60 sm:p-6">
+      <div className="w-full max-w-[84rem] min-w-0 overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/60 sm:rounded-3xl sm:p-6">
         {/* Top bar */}
-        <header className="flex items-center gap-3 pb-4 sm:pb-5">
-          <LogoIcon className="h-6 w-6 shrink-0 text-blue-600" />
+        <header className="flex items-center gap-2 pb-3.5 sm:gap-3 sm:pb-5">
+          <LogoIcon className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 text-blue-600" />
 
-          <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+          <h1 className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 truncate min-w-0">
             TechMart Voice Agent
           </h1>
 
@@ -338,7 +338,7 @@ function App() {
           header, feature strip and page padding come to ~17rem, so anything
           taller than that budget would put the page into scroll.
         */}
-        <div className="grid gap-4 lg:h-[clamp(24rem,calc(100vh-17rem),40rem)] lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-stretch">
+        <div className="grid w-full min-w-0 gap-3.5 sm:gap-4 lg:h-[clamp(24rem,calc(100vh-17rem),40rem)] lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:items-stretch">
           <AvatarStage
             status={status}
             isMuted={isMuted}
@@ -353,13 +353,12 @@ function App() {
             onToggleMute={toggleMute}
           />
 
-          <div className="h-[30rem] min-h-0 lg:h-full">
+          <div className="h-[28rem] sm:h-[30rem] min-w-0 w-full lg:h-full">
             <ChatPanel
               messages={messages}
               isThinking={isThinking}
               onSend={handleSendText}
             />
-
           </div>
         </div>
 

@@ -69,7 +69,7 @@ export function AvatarStage({
     // Taller than wide on phones so the floating control bar clears the
     // avatar's face; back to 4/3 from tablets up, and free-height on desktop
     // where the grid row sets it.
-    <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-slate-900 sm:aspect-[4/3] lg:aspect-auto lg:h-full">
+    <div className="relative aspect-[4/5] w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-slate-900 sm:aspect-[4/3] lg:aspect-auto lg:h-full">
       {/* Idle loop, standing in for the avatar until the live stream starts. */}
       <video
         ref={idleVideoRef}
@@ -104,13 +104,13 @@ export function AvatarStage({
 
       {/* Sits above the control bar so the two never overlap. */}
       {notice && !hasAvatar && (
-        <p className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/60 px-3 py-1.5 text-center text-xs text-slate-200 backdrop-blur-sm">
+        <p className="absolute bottom-16 sm:bottom-20 left-1/2 max-w-[90%] -translate-x-1/2 rounded-full bg-slate-950/60 px-3 py-1.5 text-center text-xs text-slate-200 backdrop-blur-sm truncate">
           {notice}
         </p>
       )}
 
       {/* Live badge */}
-      <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-slate-950/70 px-3 py-1.5 backdrop-blur-sm">
+      <div className="absolute left-3 top-3 sm:left-4 sm:top-4 flex items-center gap-1.5 sm:gap-2 rounded-full bg-slate-950/70 px-2.5 py-1 sm:px-3 sm:py-1.5 backdrop-blur-sm">
         <span className="relative flex h-2 w-2">
           {isLive && (
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -127,39 +127,39 @@ export function AvatarStage({
           />
         </span>
 
-        <span className="text-xs font-medium text-white">
+        <span className="text-[11px] sm:text-xs font-medium text-white">
           {statusCopy[status]}
         </span>
       </div>
 
       {/* Only during a call — typed messages already show dots in the chat panel */}
       {isThinking && isLive && (
-        <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-slate-950/70 px-3 py-1.5 backdrop-blur-sm">
+        <div className="absolute right-3 top-3 sm:right-4 sm:top-4 flex items-center gap-1.5 rounded-full bg-slate-950/70 px-2.5 py-1 sm:px-3 sm:py-1.5 backdrop-blur-sm">
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400 [animation-delay:-0.3s]" />
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400 [animation-delay:-0.15s]" />
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400" />
-          <span className="ml-1 text-xs font-medium text-white">Thinking</span>
+          <span className="ml-1 text-[11px] sm:text-xs font-medium text-white">Thinking</span>
         </div>
       )}
 
       {/* Call controls */}
-      <div className="absolute bottom-4 left-1/2 flex w-[min(30rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-full bg-slate-950/55 p-2.5 backdrop-blur-md">
+      <div className="absolute bottom-3 sm:bottom-4 left-1/2 flex w-[calc(100%-1.25rem)] max-w-md -translate-x-1/2 items-center gap-2 sm:gap-3 rounded-full bg-slate-950/70 p-2 sm:p-2.5 backdrop-blur-md">
         <button
           type="button"
           onClick={onToggleMute}
           disabled={!isLive}
           aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
           aria-pressed={isMuted}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40 ${
+          className={`grid h-9 w-9 sm:h-11 sm:w-11 shrink-0 place-items-center rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40 ${
             isMuted
               ? "bg-white text-slate-900"
               : "bg-white/12 text-white hover:bg-white/20"
           }`}
         >
           {isMuted ? (
-            <MicOffIcon className="h-5 w-5" />
+            <MicOffIcon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           ) : (
-            <MicIcon className="h-5 w-5" />
+            <MicIcon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           )}
         </button>
 
@@ -176,16 +176,16 @@ export function AvatarStage({
           onClick={isLive ? onStop : onStart}
           disabled={status === "connecting"}
           aria-label={isLive ? "End call" : "Start call"}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40 ${
+          className={`grid h-9 w-9 sm:h-11 sm:w-11 shrink-0 place-items-center rounded-full text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:opacity-40 ${
             isLive
               ? "bg-red-500 hover:bg-red-600"
               : "bg-emerald-500 hover:bg-emerald-600"
           }`}
         >
           {isLive ? (
-            <PhoneOffIcon className="h-5 w-5" />
+            <PhoneOffIcon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           ) : (
-            <PhoneIcon className="h-4.5 w-4.5" />
+            <PhoneIcon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
           )}
         </button>
       </div>

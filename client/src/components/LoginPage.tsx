@@ -41,12 +41,12 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
   };
 
   return (
-    <div className="app-backdrop flex min-h-screen w-full items-center justify-center p-4 sm:p-6 lg:p-10 font-sans">
+    <div className="app-backdrop flex min-h-screen w-full max-w-full items-center justify-center p-3 sm:p-6 lg:p-10 font-sans overflow-x-hidden">
       {/* Main Split Card */}
-      <div className="w-full max-w-[62rem] min-h-[38rem] bg-white rounded-[2rem] shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+      <div className="w-full max-w-[62rem] min-h-0 sm:min-h-[38rem] bg-white rounded-2xl sm:rounded-[2rem] shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         
         {/* Left Side: Form */}
-        <div className="p-8 sm:p-10 md:p-12 lg:p-14 flex flex-col justify-between">
+        <div className="p-5 sm:p-8 md:p-12 lg:p-14 flex flex-col justify-between">
           <div>
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-8">

@@ -35,7 +35,7 @@ export function CartDrawer({ isOpen, onClose, cartItems, isLoading }: CartDrawer
   );
 
   return (
-    <div className="absolute right-0 top-11 w-80 sm:w-96 bg-white rounded-2xl p-4 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
+    <div className="absolute right-0 top-11 w-[calc(100vw-2.5rem)] max-w-[22rem] sm:w-96 bg-white rounded-2xl p-3.5 sm:p-4 shadow-xl ring-1 ring-slate-200/80 z-50 animate-in fade-in zoom-in-95 duration-150">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
