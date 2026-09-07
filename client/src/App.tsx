@@ -14,7 +14,6 @@ import {
 import { LoginPage } from "./components/LoginPage";
 import { OrderConfirmDialog } from "./components/OrderConfirmDialog";
 import { useSimliAvatar } from "./hooks/useSimliAvatar";
-import type { AvatarStatus } from "./hooks/useSimliAvatar";
 import { useVoiceAgent } from "./hooks/useVoiceAgent";
 import { fetchCurrentUser, getAuthHeaders, removeToken } from "./lib/auth";
 import type { AuthUser } from "./lib/auth";
@@ -37,14 +36,6 @@ const features = [
     body: "Returns, refunds and warranty lookups",
   },
 ];
-
-const avatarPillCopy: Record<AvatarStatus, string> = {
-  unavailable: "Voice only",
-  idle: "Avatar idle",
-  connecting: "Connecting",
-  ready: "Live avatar",
-  error: "Avatar error",
-};
 
 function App() {
   const avatar = useSimliAvatar();
@@ -176,6 +167,14 @@ function App() {
     void avatar.stop();
     stopCall();
   }, [avatar, stopCall]);
+
+  // The banner shows whichever error is set, so Dismiss has to clear both --
+  // clearing only the voice one leaves an avatar error on screen with a button
+  // that does nothing.
+  const handleDismissError = useCallback(() => {
+    dismissError();
+    avatar.dismissError();
+  }, [avatar, dismissError]);
 
   const handleLogout = () => {
     removeToken();
@@ -323,7 +322,7 @@ function App() {
 
             <button
               type="button"
-              onClick={dismissError}
+              onClick={handleDismissError}
               className="shrink-0 font-medium text-red-600 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
             >
               Dismiss

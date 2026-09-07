@@ -76,19 +76,17 @@ venv\Scripts\Activate.ps1        # Windows PowerShell (source venv/bin/activate 
 pip install -r requirements.txt
 ```
 
-Create `server/.env` (see below), then create the schema and build the
-knowledge base index. Run both from `server/`:
+Copy `server/.env.example` to `server/.env` and fill it in (see below), then
+create the schema and build the knowledge base index. Run both from `server/`:
 
 ```bash
 python create_tables.py
 python -m app.rag.index
 ```
 
-Two things to know on a first run: `create_tables.py` runs an `ALTER TABLE
-users` migration before creating the tables, so on a completely empty database
-it fails the first time and succeeds on a second pass. And no products are
-seeded — insert a catalogue into `products` before the cart and checkout tools
-have anything to sell.
+`create_tables.py` is safe to re-run and drops nothing. One thing to know on a
+first run: no products are seeded, so insert a catalogue into `products` before
+the cart and checkout tools have anything to sell.
 
 ### Client
 
@@ -96,6 +94,9 @@ have anything to sell.
 cd client
 npm install
 ```
+
+`client/.env` is optional — copy `client/.env.example` if you need to point the
+app at a server that is not on `localhost:8000`.
 
 ## Environment variables
 

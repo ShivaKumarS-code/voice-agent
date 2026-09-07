@@ -6,7 +6,13 @@ from app.auth.security import get_current_user
 from app.db.database import get_session
 from app.db.models import User
 from app.models.chat import ChatRequest
-from app.agent.helpers import is_cart_updated_in_turn, pending_interrupt
+from app.agent.helpers import (
+    STALE_CONFIRMATION_REPLY,
+    discard_pending_confirmation,
+    has_pending_confirmation,
+    is_cart_updated_in_turn,
+    pending_interrupt,
+)
 from app.routes.auth import resolve_customer_id
 
 router = APIRouter(prefix='/chat')
@@ -44,8 +50,25 @@ def chat(
     if data.approved is not None:
         # Answering a confirmation resumes the paused turn rather than starting
         # a new one, so no message is added to the transcript.
+        if not has_pending_confirmation(graph, config):
+            # Nothing is waiting on this answer: it was sent twice, or the
+            # pause was already cleared by a later message. Resuming anyway
+            # replays the previous assistant reply as though it were fresh, and
+            # on a thread with no history at all it raises outright.
+            return {
+                'response': STALE_CONFIRMATION_REPLY,
+                'cart_updated': False,
+                'confirmation': None,
+            }
+
         payload = Command(resume={"approved": data.approved})
     elif data.message:
+        # A confirmation still parked on this thread would swallow the message:
+        # LangGraph re-runs the pending tool and re-raises the same interrupt
+        # instead of answering, for this message and every one after it. The
+        # customer has moved on, so treat the unanswered prompt as declined.
+        discard_pending_confirmation(graph, config)
+
         payload = {
             "messages": [
                 {

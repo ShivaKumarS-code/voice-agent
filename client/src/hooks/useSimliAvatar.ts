@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LogLevel, SimliClient } from "simli-client";
+import type { SimliClient } from "simli-client";
 
 import { getAuthHeaders } from "../lib/auth";
 import { apiUrl } from "../lib/config";
@@ -121,6 +121,13 @@ export function useSimliAvatar() {
 
       const { session_token: sessionToken } = await response.json();
 
+      // Loaded here rather than at module scope: simli-client pulls in
+      // livekit-client, which is most of the bundle, and none of it is needed
+      // until someone actually starts a call. Deferring it keeps the login
+      // page and the first dashboard paint off that download. The idle video
+      // is already looping while this resolves.
+      const { LogLevel, SimliClient } = await import("simli-client");
+
       const client = new SimliClient(
         sessionToken,
         videoRef.current,
@@ -205,5 +212,6 @@ export function useSimliAvatar() {
     stop,
     sendAudio,
     interrupt,
+    dismissError: useCallback(() => setError(null), []),
   };
 }

@@ -19,6 +19,36 @@ html, body {
 
 
 /*
+  Slim scrollbar for panels that scroll inside the card, where the platform
+  default is heavy enough to unbalance the layout. Firefox reads the standard
+  properties; Chrome and Safari need the WebKit pseudo-elements, so both are
+  declared. Track stays transparent so it disappears against any panel colour.
+*/
+@utility custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--color-slate-300);
+    border-radius: 9999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-slate-400);
+  }
+}
+
+
+/*
   Mesh gradient behind the card: four elliptical washes over a near-white base.
   Each one fades to its own colour at zero alpha rather than to `transparent`,
   so nothing interpolates through grey. Listed topmost-first, so the periwinkle

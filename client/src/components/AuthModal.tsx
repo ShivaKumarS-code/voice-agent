@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { loginUser, registerUser } from "../lib/auth";
 import type { AuthUser } from "../lib/auth";
-import { LockIcon, LogoIcon } from "./Icons";
+import { LogoIcon } from "./Icons";
 
 interface AuthModalProps {
   isOpen: boolean;

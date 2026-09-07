@@ -10,7 +10,13 @@ from app.db.database import get_session
 from app.routes.auth import resolve_customer_id
 from app.services.speech_to_text import SpeechToText
 from app.services.text_to_speech import TextToSpeech
-from app.agent.helpers import is_cart_updated_in_turn, pending_interrupt
+from app.agent.helpers import (
+    STALE_CONFIRMATION_REPLY,
+    discard_pending_confirmation,
+    has_pending_confirmation,
+    is_cart_updated_in_turn,
+    pending_interrupt,
+)
 
 
 router = APIRouter()
@@ -85,6 +91,19 @@ async def speech_to_text(
                     config = build_config()
 
                     # --------------------------------------------------
+                    # Clear an unanswered confirmation first
+                    # --------------------------------------------------
+                    # A dropped call or a closed tab leaves the thread parked on
+                    # the order prompt. LangGraph re-runs the pending tool and
+                    # re-raises the same interrupt instead of answering this
+                    # transcript, and it keeps doing that for every turn after
+                    # it, so the customer never gets another reply. They have
+                    # plainly moved on, so treat the prompt as declined.
+                    await asyncio.to_thread(
+                        discard_pending_confirmation, graph, config
+                    )
+
+                    # --------------------------------------------------
                     # Run LangGraph
                     # --------------------------------------------------
                     result = await asyncio.to_thread(
@@ -100,7 +119,7 @@ async def speech_to_text(
                         config=config,
                     )
 
-                    await deliver_turn(result, config)
+                    await deliver_turn(result)
 
                 except WebSocketDisconnect:
                     print(
@@ -121,7 +140,7 @@ async def speech_to_text(
                     except Exception:
                         pass
 
-            async def deliver_turn(result: dict, config: dict):
+            async def deliver_turn(result: dict):
                 """Speaks the agent's reply, or asks for confirmation instead."""
                 messages = result.get("messages", [])
 
@@ -147,10 +166,18 @@ async def speech_to_text(
                     })
                     return
 
-                # --------------------------------------------------
-                # Get agent response
-                # --------------------------------------------------
-                response = messages[-1].content if messages else ""
+                await speak(messages[-1].content if messages else "")
+
+            async def speak(response: str):
+                """Sends a reply to the browser, then the audio for it."""
+                # Coerced only so this check cannot itself raise: message
+                # content is a string in practice, but a list would reach here
+                # unchanged, the way it did before this check existed.
+                if not str(response or "").strip():
+                    # Nothing to say, and synthesising an empty string just
+                    # earns a 400 from the provider.
+                    print("Empty reply, nothing to speak")
+                    return
 
                 print("Agent:", response)
 
@@ -186,14 +213,26 @@ async def speech_to_text(
                     print("Confirmation answered:", approved)
 
                     graph = websocket.app.state.graph
+                    config = build_config()
+
+                    if not await asyncio.to_thread(
+                        has_pending_confirmation, graph, config
+                    ):
+                        # Nothing is waiting on this answer: it was sent twice,
+                        # or the call reconnected after the pause was cleared.
+                        # Resuming anyway would replay the previous reply as
+                        # though it were fresh, and on a thread with no history
+                        # at all it raises outright.
+                        await speak(STALE_CONFIRMATION_REPLY)
+                        return
 
                     result = await asyncio.to_thread(
                         graph.invoke,
                         Command(resume={"approved": approved}),
-                        config=build_config(),
+                        config=config,
                     )
 
-                    await deliver_turn(result, build_config())
+                    await deliver_turn(result)
 
                 except WebSocketDisconnect:
                     print("Client disconnected while resuming")
