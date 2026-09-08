@@ -76,7 +76,7 @@ venv\Scripts\Activate.ps1        # Windows PowerShell (source venv/bin/activate 
 pip install -r requirements.txt
 ```
 
-Copy `server/.env.example` to `server/.env` and fill it in (see below), then
+Copy `server/.env.example` to `server/.env` and fill it in, then
 create the schema and build the knowledge base index. Run both from `server/`:
 
 ```bash
@@ -97,35 +97,6 @@ npm install
 
 `client/.env` is optional — copy `client/.env.example` if you need to point the
 app at a server that is not on `localhost:8000`.
-
-## Environment variables
-
-`server/.env`:
-
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `DATABASE_URL` | yes | — | Postgres connection string, used for both business data and checkpoints |
-| `GROQ_API_KEY` | yes | — | Chat model |
-| `DEEPGRAM_API_KEY` | yes | — | Speech-to-text |
-| `ELEVENLABS_API_KEY` | yes | — | Text-to-speech; the app will not start without it |
-| `GOOGLE_API_KEY` | yes | — | Embeddings for the knowledge base |
-| `PINECONE_API_KEY` | yes | — | Vector store |
-| `INDEX_NAME` | yes | — | Pinecone index name |
-| `SIMLI_API_KEY` | no | — | Avatar; without it the UI stays voice-only |
-| `SIMLI_FACE_ID` | no | — | Which Simli face to use |
-| `JWT_SECRET_KEY` | no | dev placeholder | Set this in any deployment |
-| `JWT_ALGORITHM` | no | `HS256` | |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | no | `1440` | Token lifetime |
-| `LANGSMITH_API_KEY` | no | — | Enables tracing; without it tracing stays off |
-| `LANGSMITH_PROJECT` | no | `voice-agent` | |
-| `LANGSMITH_ENDPOINT` | no | `https://api.smith.langchain.com` | |
-
-`client/.env` (both optional):
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `VITE_API_URL` | `http://localhost:8000` | API origin; the websocket URL is derived from it |
-| `VITE_IDLE_VIDEO_URL` | `/avatar-idle.mp4` | Idle clip shown before the live avatar connects |
 
 ## Running it
 
