@@ -6,7 +6,7 @@ lip-synced avatar, while doing real work on their account — reading orders,
 managing a cart, raising returns and refunds, and placing orders behind a
 confirmation prompt.
 
-A turn is: microphone → Deepgram transcription → LangGraph agent on Groq →
+A turn is: microphone → Deepgram transcription → LangGraph agent on Google Gemini (`gemini-3.5-flash-lite`) →
 ElevenLabs speech → Simli avatar. The same agent is reachable as plain text
 chat over the same conversation thread, so a customer can start by typing and
 finish by talking.
@@ -24,11 +24,11 @@ finish by talking.
 
 ## Tech stack
 
-**Server** — FastAPI, LangGraph, `openai/gpt-oss-20b` via Groq, Deepgram
-(`flux-general-en`) for STT, ElevenLabs (`eleven_flash_v2_5`) for TTS, Simli for
-the avatar, Postgres via SQLModel (business data plus graph checkpoints),
-Pinecone + `gemini-embedding-001` for retrieval, PyJWT auth, optional LangSmith
-tracing.
+**Server** — FastAPI, LangGraph, Google Gemini (`gemini-3.5-flash-lite`) via
+`langchain-google-genai`, Deepgram (`flux-general-en`) for STT, ElevenLabs
+(`eleven_flash_v2_5`) for TTS, Simli for the avatar, Postgres via SQLModel
+(business data plus graph checkpoints), Pinecone + `gemini-embedding-001` for
+retrieval, PyJWT auth, optional LangSmith tracing.
 
 **Client** — React 19, TypeScript, Vite, Tailwind CSS v4, `simli-client`.
 
@@ -62,8 +62,8 @@ server/
 - Python 3.11+
 - Node.js 20+
 - A Postgres database
-- API keys: Groq, Deepgram, ElevenLabs, Google AI, Pinecone. Simli and
-  LangSmith are optional.
+- API keys: Google AI (for both Gemini LLM and embeddings), Deepgram, ElevenLabs,
+  Pinecone. Simli and LangSmith are optional.
 
 ## Setup
 
