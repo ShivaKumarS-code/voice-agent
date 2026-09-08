@@ -243,17 +243,15 @@ function App() {
                   setIsCartOpen((prev) => !prev);
                   if (!isCartOpen) void fetchCart(false);
                 }}
-                className={`relative p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer ${
-                  isCartBouncing ? "animate-bounce ring-2 ring-blue-500 text-blue-600 bg-blue-50" : ""
-                }`}
+                className={`relative p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer ${isCartBouncing ? "animate-bounce ring-2 ring-blue-500 text-blue-600 bg-blue-50" : ""
+                  }`}
                 title="View Cart"
               >
                 <CartIcon className="h-6 w-6" />
                 {cartCount > 0 && (
                   <span
-                    className={`absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-md shadow-blue-500/40 transition-transform ${
-                      isCartBouncing ? "scale-125 bg-emerald-500" : ""
-                    }`}
+                    className={`absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-md shadow-blue-500/40 transition-transform ${isCartBouncing ? "scale-125 bg-emerald-500" : ""
+                      }`}
                   >
                     {cartCount}
                   </span>
@@ -353,7 +351,8 @@ function App() {
             onToggleMute={toggleMute}
           />
 
-          <div className="h-[28rem] sm:h-[30rem] min-w-0 w-full lg:h-full">
+          {/* Chat column — add overflow-hidden */}
+          <div className="h-[28rem] sm:h-[30rem] min-w-0 w-full lg:h-full overflow-hidden">
             <ChatPanel
               messages={messages}
               isThinking={isThinking}

@@ -32,7 +32,7 @@ KEEP_RECENT_MESSAGES = 10
 
 
 llm = ChatGroq(
-    model="openai/gpt-oss-20b",
+    model="openai/gpt-oss-120b",
     api_key=settings.GROQ_API_KEY,
     temperature=0.2
 )
@@ -96,6 +96,7 @@ Follow these rules:
 - Keep the response concise enough to sound natural when spoken, but include all information necessary to answer the user's question.
 - Use normal punctuation and paragraph breaks.
 - Write currency, abbreviations, and symbols in a way that sounds natural when spoken.
+- Always output order IDs, tracking numbers, product IDs, and reference codes EXACTLY as returned by tools (e.g. "Order 61098039" or "ID c9116f6b-1708..."). NEVER spell out IDs or codes letter-by-letter or digit-by-digit as English words (never write "c-nine-one-one..." or "six-one-zero..."). Modern text-to-speech reads standard digits and alphanumeric codes properly.
 - Never output content intended only for visual formatting.
 
 For example, instead of:
