@@ -197,3 +197,39 @@ def is_cart_updated_in_turn(messages: list) -> bool:
             return True
 
     return False
+
+
+def extract_message_text(content) -> str:
+    """
+    Normalizes message content into a plain string.
+
+    Different LLM providers (e.g. Google Gemini in langchain_google_genai)
+    return AIMessage.content as a list of parts, e.g.:
+    [{'type': 'text', 'text': '...', 'extras': ...}]
+    instead of a flat string.
+    """
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                if "text" in item and item["text"]:
+                    parts.append(str(item["text"]))
+                elif "content" in item and item["content"]:
+                    parts.append(str(item["content"]))
+            elif hasattr(item, "text"):
+                parts.append(str(item.text))
+        return "".join(parts).strip()
+
+    if isinstance(content, dict):
+        if "text" in content and content["text"]:
+            return str(content["text"])
+        if "content" in content and content["content"]:
+            return str(content["content"])
+
+    return str(content or "").strip()
+

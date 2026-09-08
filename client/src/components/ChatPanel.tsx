@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { BoxIcon, LockIcon, SendIcon, TruckIcon, UserIcon } from "./Icons";
+import { normalizeMessageText } from "../lib/format";
 import type { Message } from "../lib/types";
 
 interface ChatPanelProps {
@@ -93,7 +94,7 @@ export function ChatPanel({ messages, isThinking, onSend }: ChatPanelProps) {
                     : "rounded-xl rounded-tl-sm bg-white text-slate-700 shadow-sm ring-1 ring-slate-200/60"
                 }`}
               >
-                {message.text}
+                {normalizeMessageText(message.text)}
               </div>
 
               <span className="mt-1 px-1 text-[10px] sm:text-[11px] text-slate-400">

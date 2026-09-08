@@ -9,6 +9,7 @@ from app.models.chat import ChatRequest
 from app.agent.helpers import (
     STALE_CONFIRMATION_REPLY,
     discard_pending_confirmation,
+    extract_message_text,
     has_pending_confirmation,
     is_cart_updated_in_turn,
     pending_interrupt,
@@ -98,7 +99,7 @@ def chat(
         }
 
     return {
-        'response': messages[-1].content if messages else "",
+        'response': extract_message_text(messages[-1].content) if messages else "",
         'cart_updated': is_cart_updated_in_turn(messages),
         'confirmation': None,
     }

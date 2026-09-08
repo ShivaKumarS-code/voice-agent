@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pcm16ToAudioBuffer } from "../lib/audio";
 import { getAuthHeaders, getToken } from "../lib/auth";
 import { apiUrl, wsUrl } from "../lib/config";
-import { createId, formatTime } from "../lib/format";
+import { createId, formatTime, normalizeMessageText } from "../lib/format";
 
 import type { OrderConfirmation } from "../components/OrderConfirmDialog";
 import type { CallStatus, Message, Role } from "../lib/types";
@@ -60,10 +60,10 @@ export function useVoiceAgent(options: VoiceAgentOptions = {}) {
   // the agent while it speaks, the microphone otherwise.
   const activeAnalyserRef = useRef<AnalyserNode | null>(null);
 
-  const addMessage = useCallback((role: Role, text: string) => {
+  const addMessage = useCallback((role: Role, text: unknown) => {
     setMessages((current) => [
       ...current,
-      { id: createId(), role, text, time: formatTime() },
+      { id: createId(), role, text: normalizeMessageText(text), time: formatTime() },
     ]);
   }, []);
 

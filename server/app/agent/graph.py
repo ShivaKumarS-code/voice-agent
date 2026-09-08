@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, MessagesState, END, START
-from langchain.messages import AIMessage, RemoveMessage, SystemMessage
-from langchain_groq import ChatGroq
+from langchain.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.runnables import RunnableConfig
 from app.config import settings
 from app.tools.rag import search_knowledge_base
@@ -10,6 +10,7 @@ from app.tools.checkout import place_order
 from app.tools.product import get_all_products, search_products
 from app.agent.helpers import (
     PROVIDER_FAILURE_REPLY,
+    extract_message_text,
     find_summary_cutoff,
     is_tool_call_generation_failure,
     sanitize_tool_messages,
@@ -31,10 +32,9 @@ SUMMARY_TRIGGER = 30
 KEEP_RECENT_MESSAGES = 10
 
 
-llm = ChatGroq(
-    model="openai/gpt-oss-120b",
-    api_key=settings.GROQ_API_KEY,
-    temperature=0.2
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.5-flash-lite",
+    api_key=settings.GOOGLE_API_KEY,
 )
 
 tools = [
@@ -229,15 +229,33 @@ def summarize_conversation(state: AgentState):
     else:
         instruction = "Summarize the transcript above."
 
+    formatted_transcript = []
+    for msg in older:
+        msg_type = getattr(msg, "type", "")
+        if msg_type == "human":
+            role = "Customer"
+        elif msg_type == "ai":
+            role = "Assistant"
+        elif msg_type == "tool":
+            role = f"Tool ({getattr(msg, 'name', 'result')})"
+        else:
+            role = "Message"
+
+        content = extract_message_text(getattr(msg, "content", ""))
+        if content:
+            formatted_transcript.append(f"{role}: {content}")
+
+    transcript_text = "\n".join(formatted_transcript)
+    prompt_content = f"TRANSCRIPT TO SUMMARIZE:\n\n{transcript_text}\n\nINSTRUCTION:\n{instruction}"
+
     # The summarizer must not call tools: it only reads the transcript.
     response = llm.invoke([
         SystemMessage(content=SUMMARY_PROMPT),
-        *sanitize_tool_messages(older),
-        SystemMessage(content=instruction),
+        HumanMessage(content=prompt_content),
     ])
 
     return {
-        "summary": response.content,
+        "summary": extract_message_text(response.content),
         # A message with no id cannot be addressed for removal, so it stays.
         "messages": [
             RemoveMessage(id=msg.id)

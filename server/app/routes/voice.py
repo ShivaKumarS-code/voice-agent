@@ -13,6 +13,7 @@ from app.services.text_to_speech import TextToSpeech
 from app.agent.helpers import (
     STALE_CONFIRMATION_REPLY,
     discard_pending_confirmation,
+    extract_message_text,
     has_pending_confirmation,
     is_cart_updated_in_turn,
     pending_interrupt,
@@ -166,14 +167,12 @@ async def speech_to_text(
                     })
                     return
 
-                await speak(messages[-1].content if messages else "")
+                await speak(extract_message_text(messages[-1].content) if messages else "")
 
             async def speak(response: str):
                 """Sends a reply to the browser, then the audio for it."""
-                # Coerced only so this check cannot itself raise: message
-                # content is a string in practice, but a list would reach here
-                # unchanged, the way it did before this check existed.
-                if not str(response or "").strip():
+                response = extract_message_text(response)
+                if not response.strip():
                     # Nothing to say, and synthesising an empty string just
                     # earns a 400 from the provider.
                     print("Empty reply, nothing to speak")
