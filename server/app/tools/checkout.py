@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -146,7 +146,7 @@ def place_order(config: RunnableConfig, customer_request: str = "") -> dict:
         order = Order(
             customer_id=customer_id,
             status=OrderStatus.processing,
-            order_date=datetime.now(),
+            order_date=datetime.now(timezone.utc),
             total_amount=subtotal,
         )
 

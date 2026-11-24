@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from app.db.models import Customer, Order, OrderItem, Shipment, Return, Replacement, Refund
 from sqlmodel import Session, select
 from app.db.database import engine
-from datetime import datetime
+from datetime import datetime, timezone
 
 NO_CUSTOMER_RESULT = {
     "success": False,
@@ -231,7 +231,7 @@ def request_return(order_id: str, order_item_id: str, reason: str, config: Runna
             order_item_id=item.id,
             status="pending",
             reason=reason,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
 
         session.add(return_request)
@@ -297,7 +297,7 @@ def request_replacement(
             order_item_id=item.id,
             status="pending",
             reason=reason,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
 
         session.add(replacement)
@@ -376,7 +376,7 @@ def process_refund(return_id: str, config: RunnableConfig) -> dict:
             return_id=return_request.id,
             amount=order.total_amount,
             status="processed",
-            processed_at=datetime.now(),
+            processed_at=datetime.now(timezone.utc),
         )
 
         session.add(refund)

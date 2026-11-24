@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 from app.db.enums import OrderStatus, ShipmentStatus, ReplacementStatus, RefundStatus, ReturnStatus
@@ -86,7 +86,13 @@ class User(SQLModel, table=True):
     full_name: str | None = None
     customer_id: UUID | None = Field(default=None, foreign_key="customers.id")
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Fully qualified and timezone-aware on purpose. A bare `datetime.utcnow`
+    # returns a naive value, and SQLModel's DateTime column rejects those at
+    # bind time ("Datetime values must have timezone information"), which turned
+    # every registration into a 500.
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
 
 class UserCreate(SQLModel):
